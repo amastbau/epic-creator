@@ -256,6 +256,22 @@ SCHEMAS = {
     },
 }
 
+# Optional for legacy artifacts; validated together when workload_id is present.
+# These have no defaults, so reading old artifacts keeps their original shape.
+_WORKLOAD_FIELDS = {
+    "workload_id": {"type": "string", "required": False},
+    "workload_version": {"type": "int", "required": False},
+    "workload_digest": {"type": "string", "required": False},
+    "source_key": {"type": "string", "required": False},
+    "source_project": {"type": "string", "required": False},
+    "source_issue_type": {"type": "string", "required": False},
+    "source_revision": {"type": "string", "required": False},
+    "attachment_id": {"type": "string", "required": False},
+    "attachment_created": {"type": "string", "required": False},
+}
+for _schema in SCHEMAS.values():
+    _schema.update(_WORKLOAD_FIELDS)
+
 
 # ─── Validation ─────────────────────────────────────────────────────────────────
 
@@ -335,6 +351,26 @@ def validate(data, schema_type):
 
     schema = SCHEMAS[schema_type]
     errors = []
+
+    if any(name in data for name in _WORKLOAD_FIELDS):
+        from workload import WorkloadError, get_workload
+        try:
+            workload = get_workload(data.get("workload_id"))
+            if type(data.get("workload_version")) is not int or data["workload_version"] != workload.version:
+                raise WorkloadError("workload_version does not match the registered descriptor")
+            if data.get("workload_digest") != workload.digest:
+                raise WorkloadError("workload_digest does not match the registered descriptor")
+            workload.validate_identity(data.get("source_key"), data.get("source_project"),
+                                       data.get("source_issue_type"))
+            if not isinstance(data.get("source_revision"), str) or not data["source_revision"].strip():
+                raise WorkloadError("source_revision is required for workload artifacts")
+            identity = "parent_strat" if "parent_strat" in schema else "strat_id"
+            if data.get(identity) != data["source_key"]:
+                raise WorkloadError(f"{identity} conflicts with source_key")
+            # Never mutate the process-wide legacy schema during validation.
+            schema = {**schema, identity: {**schema[identity], "pattern": workload.id_pattern}}
+        except WorkloadError as exc:
+            errors.append(str(exc))
 
     for key in data:
         if key not in schema:
@@ -417,7 +453,18 @@ def read_frontmatter(path):
     with open(path, encoding="utf-8") as f:
         content = f.read()
 
-    match = _FRONTMATTER_RE.match(content)
+    return parse_frontmatter(content)
+
+
+def parse_frontmatter(content, *, strict=False):
+    """Parse frontmatter; strict intake rejects malformed declared metadata."""
+    if strict:
+        match = re.match(r'^---[ \t]*\r?\n(.*?)^---[ \t]*(?:\r?\n|$)',
+                         content, re.DOTALL | re.MULTILINE)
+        if not match and re.match(r'^---(?:[ \t]*\r?\n|[ \t]*$)', content):
+            raise ValidationError("Unterminated attachment frontmatter")
+    else:
+        match = _FRONTMATTER_RE.match(content)
     if not match:
         return {}, content
 
@@ -426,6 +473,8 @@ def read_frontmatter(path):
 
     data = yaml.safe_load(yaml_str)
     if not isinstance(data, dict):
+        if strict:
+            raise ValidationError("Attachment frontmatter must be a mapping")
         return {}, content
 
     return data, body
@@ -452,12 +501,12 @@ def read_frontmatter_validated(path, schema_type):
     return data, body
 
 
-def write_frontmatter(path, data, schema_type):
+def write_frontmatter(path, data, schema_type, *, body=None):
     """Write/update YAML frontmatter on a markdown file.
 
     Validates data against the schema before writing. Preserves the
-    markdown body below the frontmatter. Creates the file if it doesn't
-    exist (with empty body).
+    markdown body unless an explicit replacement body is supplied.
+    Creates the file if it doesn't exist (with empty body by default).
 
     Raises:
         ValidationError: if data fails schema validation
@@ -469,9 +518,10 @@ def write_frontmatter(path, data, schema_type):
             f"Frontmatter validation failed:\n"
             + "\n".join(f"  - {e}" for e in errors))
 
-    body = ""
-    if os.path.exists(path):
-        _, body = read_frontmatter(path)
+    if body is None:
+        body = ""
+        if os.path.exists(path):
+            _, body = read_frontmatter(path)
 
     yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False,
                          allow_unicode=True)

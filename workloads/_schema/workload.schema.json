@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Epic Creator intake workload, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "source"],
+  "properties": {
+    "schema_version": {"const": 1, "type": "integer"},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "version": {"const": 1, "type": "integer"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "issue_type", "id_pattern", "attachment_template", "description_fallback", "ready_labels", "skip_policy", "processed_label", "handoff_type", "identity_fields"],
+      "properties": {
+        "project": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "issue_type": {"type": "string", "minLength": 1},
+        "id_pattern": {"type": "string", "minLength": 3},
+        "attachment_template": {"const": "{key}-strategy.md"},
+        "description_fallback": {"type": "boolean"},
+        "ready_labels": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "skip_policy": {"enum": ["child-epics", "processed-label"]},
+        "processed_label": {"type": "string", "minLength": 1},
+        "handoff_type": {"type": "string", "minLength": 1},
+        "identity_fields": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"enum": ["strat_id", "jira_key", "source_initiative"]}
+        }
+      }
+    }
+  }
+}

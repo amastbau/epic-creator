@@ -1,0 +1,16 @@
+schema_version: 1
+id: rhaistrat-strategy
+version: 1
+source:
+  project: RHAISTRAT
+  issue_type: Feature
+  id_pattern: '^RHAISTRAT-\d+$'
+  attachment_template: '{key}-strategy.md'
+  description_fallback: true
+  ready_labels:
+    - strat-creator-rubric-pass
+    - strat-creator-human-sign-off
+  skip_policy: child-epics
+  processed_label: epic-creator-auto-decomposed
+  handoff_type: rfe-strategy
+  identity_fields: [strat_id, jira_key]
