@@ -1,12 +1,11 @@
 # Descriptor-driven strategy intake
 
-This is the first AISDLC-61 implementation slice: a validated intake registry,
-opt-in strategy fetching, and workload provenance in artifact schemas. The
+AISDLC-61 adds a validated intake registry, opt-in strategy fetching, workload
+provenance, and descriptor-bound local planning stages. The
 architecture remains [Proposed](ADRs/0001-descriptor-driven-planning-workloads.md).
-Decomposition prompts, pipeline-state propagation, submission routing and
-Fullsend configuration are later review units. Initiative artifacts from this
-slice are suitable for intake testing; the complete Initiative pipeline is
-not yet implemented.
+See [workload planning](workload-pipeline.md) for policy storage, stage validation
+and tests. Submission routing, recovery and production Fullsend configuration
+remain later review units.
 
 ## Existing invocation
 
@@ -53,7 +52,8 @@ re-fetching create local artifacts only; they perform no Jira writes.
 
 Opt-in artifacts retain `strat_id`/`parent_strat` for existing consumers and add
 `workload_id`, `workload_version`, `workload_digest`, `source_key`,
-`source_project`, `source_issue_type` and `source_revision`. Downloaded
+`source_project`, `source_issue_type` and `source_revision`. Descriptors with
+planning policies also stamp `planning_digest`. Downloaded
 attachments also record `attachment_source`, `attachment_id` and
 `attachment_created`. Source keys preserve the original Initiative identity.
 
@@ -73,9 +73,10 @@ fields, unsupported versions/policies, unsafe attachment templates, invalid
 key patterns, duplicate IDs and duplicate project/type bindings. Descriptors
 are data; they do not name executable plugins.
 
-The current schema covers source identity, strategy body, ready labels,
-processed policy and handoff identity. Shared stage policies and submission
-requirements will extend the versioned contract in later AISDLC-61 PRs.
+The schema covers source identity, strategy body, ready labels, processed policy,
+handoff identity and optional planning policies. Intake-only descriptors remain
+valid; starting a pipeline requires `planning`. Submission requirements will
+extend the contract in a later AISDLC-61 review unit.
 
 ## Local contract tests
 

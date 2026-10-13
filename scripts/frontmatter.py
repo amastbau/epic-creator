@@ -42,6 +42,7 @@ from artifact_utils import (
     write_frontmatter,
     update_frontmatter,
     ValidationError,
+    _WORKLOAD_FIELDS,
 )
 
 
@@ -203,6 +204,26 @@ def cmd_set(args):
                 sys.exit(1)
             data[field_name] = _coerce_value(value_str, schema[field_name])
 
+    if args.source:
+        try:
+            source, _ = read_frontmatter_validated(args.source, "strat-task")
+            inherited = {name: source[name] for name in _WORKLOAD_FIELDS if name in source}
+            for name, value in inherited.items():
+                if name in data and data[name] != value:
+                    raise ValidationError(f"Explicit {name} conflicts with source provenance")
+            if os.path.exists(args.file):
+                existing, _ = read_frontmatter(args.file)
+                for name in _WORKLOAD_FIELDS:
+                    if name in existing and existing[name] != inherited.get(name):
+                        raise ValidationError(f"Existing {name} conflicts with source provenance")
+            identity = "parent_strat" if schema_type in ("epic-task", "decomp-summary") else "strat_id"
+            if identity in data and data[identity] != source["strat_id"]:
+                raise ValidationError("Generated identity conflicts with source strategy")
+            data = {**inherited, **data}
+        except (OSError, ValidationError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     if os.path.exists(args.file):
         try:
             update_frontmatter(args.file, data, schema_type)
@@ -282,6 +303,7 @@ def main():
     p_set.add_argument("--schema-type", dest="schema_type",
                        choices=list(SCHEMAS.keys()),
                        help="Schema type (auto-detected from path if omitted)")
+    p_set.add_argument("--source", help="Inherit validated strategy provenance")
     p_set.set_defaults(func=cmd_set)
 
     # batch-read
