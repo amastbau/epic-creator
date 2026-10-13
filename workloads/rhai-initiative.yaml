@@ -1,0 +1,16 @@
+schema_version: 1
+id: rhai-initiative
+version: 1
+source:
+  project: RHOAIENG
+  issue_type: Initiative
+  id_pattern: '^RHOAIENG-\d+$'
+  attachment_template: '{key}-strategy.md'
+  description_fallback: false
+  ready_labels:
+    - strat-creator-rubric-pass
+    - strat-creator-human-sign-off
+  skip_policy: processed-label
+  processed_label: epic-creator-auto-decomposed
+  handoff_type: initiative-strategy
+  identity_fields: [strat_id, jira_key, source_initiative]
