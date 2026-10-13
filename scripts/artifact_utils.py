@@ -225,6 +225,7 @@ SCHEMAS = {
         },
     },
     "decomp-review": {
+        "criterion_scores": {"type": "list", "required": False},
         "strat_id": {
             "type": "string",
             "required": True,
@@ -259,6 +260,7 @@ SCHEMAS = {
 # Optional for legacy artifacts; validated together when workload_id is present.
 # These have no defaults, so reading old artifacts keeps their original shape.
 _WORKLOAD_FIELDS = {
+    "planning_digest": {"type": "string", "required": False},
     "workload_id": {"type": "string", "required": False},
     "workload_version": {"type": "int", "required": False},
     "workload_digest": {"type": "string", "required": False},
@@ -360,6 +362,10 @@ def validate(data, schema_type):
                 raise WorkloadError("workload_version does not match the registered descriptor")
             if data.get("workload_digest") != workload.digest:
                 raise WorkloadError("workload_digest does not match the registered descriptor")
+            if "planning_digest" in data and (workload.planning is None or data["planning_digest"] != workload.planning.digest):
+                raise WorkloadError("planning_digest does not match the registered policies")
+            if schema_type == "decomp-review" and "planning_digest" in data:
+                workload.planning.validate_review(data)
             workload.validate_identity(data.get("source_key"), data.get("source_project"),
                                        data.get("source_issue_type"))
             if not isinstance(data.get("source_revision"), str) or not data["source_revision"].strip():

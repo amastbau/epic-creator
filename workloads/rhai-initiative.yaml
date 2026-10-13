@@ -14,3 +14,24 @@ source:
   processed_label: epic-creator-auto-decomposed
   handoff_type: initiative-strategy
   identity_fields: [strat_id, jira_key, source_initiative]
+planning:
+  artifact_template: workloads/policies/rhai/v1/artifacts.md
+  scoring: workloads/policies/rhai/v1/scoring.yaml
+  decompose: workloads/policies/rhai/v1/decompose.md
+  review: workloads/policies/rhai/v1/review.md
+  revise: workloads/policies/rhai/v1/revise.md
+  components:
+    project: RHAI
+    file: .context/rhai-components.txt
+  review_gate:
+    criteria:
+    - HLR Coverage
+    - DAG Coherence
+    - Epic Boundaries
+    - Type Correctness
+    - AI Implementability Scoring
+    - Acceptance Criteria Quality
+    - Completeness
+    points_per_criterion: 2
+    pass_score: 10
+    zero_fails: true

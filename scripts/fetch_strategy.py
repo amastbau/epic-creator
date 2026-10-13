@@ -161,6 +161,8 @@ def _write_strategy(issue_data, output_dir="artifacts/strat-tasks",
                            source_key=key, source_project=workload.project,
                            source_issue_type=workload.issue_type,
                            source_revision=fields["updated"])
+        if workload.planning:
+            frontmatter["planning_digest"] = workload.planning.digest
         if attachment_source:
             frontmatter.update(attachment_id=str(attachment.get("id", "")),
                                attachment_created=attachment["created"])

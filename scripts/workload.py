@@ -1,7 +1,7 @@
 """Validated, repository-owned workload descriptors for strategy intake.
 
-The first schema covers intake and artifact identity. Stage policies and
-submission routing are subsequent AISDLC-61 review units, not plugins.
+Descriptors bind intake identity and reviewed, repository-owned planning
+policies. They never load executable plugins.
 """
 from dataclasses import dataclass
 import json
@@ -17,6 +17,90 @@ WORKLOADS_DIR = Path(__file__).resolve().parents[1] / "workloads"
 
 class WorkloadError(ValueError):
     """Invalid descriptor, tracker identity or workload provenance."""
+
+
+@dataclass(frozen=True)
+class PlanningPolicy:
+    decompose: Path
+    review: Path
+    revise: Path
+    scoring: Path
+    artifact_template: Path
+    component_project: str
+    component_file: str
+    criteria: tuple
+    points_per_criterion: int
+    pass_score: int
+    zero_fails: bool
+    digest: str
+    implementation_high: int
+    implementation_medium: int
+    investigation_high: int
+    investigation_low: int
+
+    @property
+    def max_score(self):
+        return len(self.criteria) * self.points_per_criterion
+
+    def review_result(self, scores):
+        if (not isinstance(scores, list) or len(scores) != len(self.criteria)
+                or any(type(s) is not int or not 0 <= s <= self.points_per_criterion for s in scores)):
+            raise WorkloadError("Invalid review criterion scores for the selected policy")
+        total = sum(scores)
+        return total, total >= self.pass_score and not (self.zero_fails and 0 in scores)
+
+    def validate_review(self, data):
+        if data.get("error"):
+            if data.get("pass") is not False or data.get("recommendation") != "revise":
+                raise WorkloadError("An error review cannot pass")
+            return
+        total, passed = self.review_result(data.get("criterion_scores"))
+        if (type(data.get("score")) is not int or data["score"] != total
+                or data.get("pass") is not passed
+                or data.get("recommendation") != ("accept" if passed else "revise")):
+            raise WorkloadError("Review result conflicts with selected gate")
+        for issue in data.get("issues", []):
+            if (not isinstance(issue, dict) or issue.get("severity") not in ("critical", "major", "minor")
+                    or issue.get("criterion") not in self.criteria):
+                raise WorkloadError("Review issue does not match the selected rubric")
+            if issue["severity"] in ("critical", "major") and data["criterion_scores"][self.criteria.index(issue["criterion"])] != 0:
+                raise WorkloadError("Critical or major review issues require a zero criterion score")
+
+
+def _load_planning(data):
+    if data is None:
+        return None
+    root = WORKLOADS_DIR.parent.resolve()
+    paths, contents = {}, {}
+    for stage in ("decompose", "review", "revise", "scoring", "artifact_template"):
+        reference = Path(data[stage])
+        path = (root / reference).resolve()
+        if (reference.is_absolute() or ".." in reference.parts
+                or not path.is_relative_to(root / "workloads" / "policies")
+                or path.suffix != (".yaml" if stage == "scoring" else ".md") or not path.is_file()):
+            raise WorkloadError(f"Unsafe or missing {stage} policy: {reference}")
+        paths[stage] = path
+        contents[stage] = path.read_text(encoding="utf-8")
+    scoring = yaml.safe_load(contents["scoring"])
+    scoring_schema = json.loads((WORKLOADS_DIR / "_schema/scoring.schema.json").read_text())
+    errors = list(Draft202012Validator(scoring_schema).iter_errors(scoring))
+    if errors:
+        raise WorkloadError(f"Invalid scoring policy: {errors[0].message}")
+    implementation, investigation = scoring["implementation"], scoring["investigation"]
+    if (implementation["high_min"] <= implementation["medium_min"]
+            or investigation["high_min"] <= investigation["low_max"]):
+        raise WorkloadError("Scoring policy thresholds must be ordered")
+    gate = data["review_gate"]
+    if gate["pass_score"] > len(gate["criteria"]) * gate["points_per_criterion"]:
+        raise WorkloadError("Review pass score exceeds the rubric maximum")
+    digest = hashlib.sha256(json.dumps({"planning": data, "contents": contents},
+                           sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return PlanningPolicy(**paths, component_project=data["components"]["project"],
+                          component_file=data["components"]["file"],
+                          criteria=tuple(gate["criteria"]), points_per_criterion=gate["points_per_criterion"],
+                          pass_score=gate["pass_score"], zero_fails=gate["zero_fails"], digest=digest,
+                          implementation_high=implementation["high_min"], implementation_medium=implementation["medium_min"],
+                          investigation_high=investigation["high_min"], investigation_low=investigation["low_max"])
 
 
 def _tracker_binding(issue):
@@ -44,6 +128,7 @@ class Workload:
     handoff_type: str
     identity_fields: tuple
     digest: str
+    planning: PlanningPolicy | None = None
 
     def validate_identity(self, key, project, issue_type):
         if (project, issue_type) != (self.project, self.issue_type):
@@ -94,6 +179,7 @@ def load_registry(directory=None):
             re.compile(pattern)
             digest = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             selected = Workload(data["id"], data["version"], digest=digest,
+                                planning=_load_planning(data.get("planning")),
                                 **{**source, "ready_labels": tuple(source["ready_labels"]),
                                    "identity_fields": tuple(source["identity_fields"])})
             binding = (selected.project, selected.issue_type)
