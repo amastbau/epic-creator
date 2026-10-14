@@ -10,6 +10,7 @@ topics:
 # 1. Descriptor-driven planning workloads
 
 Date: 2026-10-11
+Updated: 2026-10-14 — add enablement discussion as architectural rationale.
 
 ## Status
 
@@ -43,6 +44,41 @@ Initiative strategies use only the newest `RHOAIENG-NNNN-strategy.md`
 attachment; the description remains the Initiative's own text, and a missing
 attachment means skip. These corrections are confirmed in
 [AISDLC-61 comment 18872381](https://redhat.atlassian.net/browse/AISDLC-61?focusedCommentId=18872381).
+
+### Rationale from the RFE Creator enablement session
+
+The 2026-10-07 **ADLC Enablement Series: RFE Creator** discussion provides
+additional rationale for this proposal. The source is the computer-generated
+transcript supplied by the user on 2026-10-14; timestamps refer to that transcript.
+
+- **Independent stations and explicit handoffs.** Antonin Stefanutti described
+  autonomous stations coordinating through Jira as the system of record, using
+  labels and human gates (06:56–09:47). This supports preserving source identity
+  and provenance across peer pipelines, with each consumer enforcing its gates.
+- **Flexible workload dispatch.** Shai Revivo described differing business-unit
+  processes and the need for variation in dispatch from requirements to
+  ready-to-code (48:21–50:47). Validated descriptors and referenced policies provide
+  that variation within Epic Decomposer while keeping stage mechanics shared.
+- **Deterministic checks and independent review.** Antonin advocated deterministic
+  Python logic wherever possible and adversarial review of creative output in a
+  fresh context, sometimes using a different model (11:06–14:40). This supports
+  enforcing descriptor, provenance and review-gate rules in code while exposing
+  planning content and review criteria through versioned policies.
+- **Evaluation of policy changes.** Antonin described regression evaluation of
+  skills and prompts, combining deterministic and model judges
+  (08:21–09:47, 12:51–14:40, 28:23–31:42). Policy extraction therefore needs model
+  quality evaluation against the existing Epic Creator corpus in addition to
+  deterministic orchestration tests.
+- **Separate runtime migration.** Antonin reported a green GitLab CI dry run with
+  the Fullsend runner and gradual production migration as the next step
+  (36:46–38:46). This supports keeping the workload architecture separate from
+  the Fullsend runtime migration tracked in AISDLC-53.
+
+These remarks support the architectural direction; they do not constitute team
+acceptance of this ADR. The existing RFE Target Version gate, cloning and
+auto-approval described in the session do not change the later verified
+Initiative contract: original Initiative identity, attachment-only strategy
+content, both Strategy Creator approval labels and no Target Version gate.
 
 ## Options
 
@@ -105,5 +141,9 @@ submission preflights the descriptor identity before the first Jira write.
 - The descriptor schema must stay cohesive as workloads grow, and the
   cross-stage contract must be versioned so stations can evolve without
   lockstep releases.
+- Changes to planning prompts and policies require model quality evaluations
+  against the existing Epic Creator corpus. Deterministic flow tests verify
+  orchestration and contracts; corpus evaluation remains outstanding for the
+  extracted policies in PR #40.
 
 Assisted-by: Codex
