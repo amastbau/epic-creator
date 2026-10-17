@@ -93,6 +93,40 @@
         }
       }
     },
+    "submission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "issue_type", "parent", "dependency_link_type", "labels"],
+      "properties": {
+        "project": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "issue_type": {"type": "string", "minLength": 1},
+        "dependency_link_type": {"type": "string", "minLength": 1},
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relation"],
+          "properties": {
+            "relation": {"enum": ["parent", "link"]},
+            "link_type": {"type": "string", "minLength": 1}
+          },
+          "if": {"properties": {"relation": {"const": "link"}}},
+          "then": {"required": ["link_type"]},
+          "else": {"not": {"required": ["link_type"]}}
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["created", "investigation", "implementation_prefix", "ai_prefix", "needs_component"],
+          "properties": {
+            "created": {"$ref": "#/$defs/label"},
+            "investigation": {"$ref": "#/$defs/label"},
+            "implementation_prefix": {"$ref": "#/$defs/label"},
+            "ai_prefix": {"$ref": "#/$defs/label"},
+            "needs_component": {"$ref": "#/$defs/label"}
+          }
+        }
+      }
+    },
     "planning": {
       "type": "object",
       "additionalProperties": false,
@@ -179,5 +213,8 @@
         }
       }
     }
+  },
+  "$defs": {
+    "label": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$", "maxLength": 120}
   }
 }

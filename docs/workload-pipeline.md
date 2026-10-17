@@ -59,8 +59,8 @@ than initializing a new state. Changed descriptor data or policy bytes reject
 resume. Generic state edits cannot switch the workload binding. A changed source
 revision also fails once the FETCH boundary has bound it.
 
-Adding `planning` changes the shipped descriptor digests. Typed artifacts from the
-earlier intake-only implementation need a fresh fetch for a new run. Old legacy
+Adding `planning` or `submission` changes the shipped descriptor digests. Typed artifacts from
+earlier implementations need a fresh fetch and planning run. Old legacy
 artifacts without workload metadata remain supported by default invocation.
 
 ## Artifact and review checks
@@ -77,8 +77,9 @@ continues to require at least 10/14 and no zero-scoring criterion. Shared wave
 scheduling and the existing two revision cycles are retained.
 
 Reports record the workload/version, both digests, gate and each source revision.
-Submission and Jira recovery are not descriptor-driven yet; production runner
-configuration and real model quality evaluation remain subsequent work.
+[Submission and Jira recovery](workload-submission.md) are available through the
+explicit submission CLI. The planning skill still stops at REPORT; production
+runner configuration and real model quality evaluation remain subsequent work.
 
 ## Testing without Jira writes
 

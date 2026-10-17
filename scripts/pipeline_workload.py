@@ -59,10 +59,10 @@ def _read(path, schema):
         raise WorkloadError(f"Invalid pipeline artifact {path}: {exc}") from exc
 
 
-def source_metadata(state, key):
+def source_metadata(state, key, artifacts_dir="artifacts"):
     selected = bound_workload(state)
     validate_ids(state, [key])
-    data = _read(Path(f"artifacts/strat-tasks/{key}.md"), "strat-task")
+    data = _read(Path(artifacts_dir) / f"strat-tasks/{key}.md", "strat-task")
     if data["strat_id"] != key:
         raise WorkloadError(f"{key}: source artifact identity conflicts with filename")
     if state.get("workload_explicit") or data.get("workload_id"):
@@ -80,8 +80,8 @@ def source_metadata(state, key):
     return metadata
 
 
-def validate_artifact(state, key, path, schema):
-    source = source_metadata(state, key)
+def validate_artifact(state, key, path, schema, artifacts_dir="artifacts"):
+    source = source_metadata(state, key, artifacts_dir)
     data = _read(path, schema)
     identity = "parent_strat" if schema in ("decomp-summary", "epic-task") else "strat_id"
     if data.get(identity) != key:
@@ -96,15 +96,15 @@ def validate_artifact(state, key, path, schema):
     return data
 
 
-def validate_decomposition(state, key):
-    summary = validate_artifact(state, key, f"artifacts/epic-tasks/{key}-decomposition.md", "decomp-summary")
-    directory = Path("artifacts/epic-tasks")
+def validate_decomposition(state, key, artifacts_dir="artifacts"):
+    directory = Path(artifacts_dir) / "epic-tasks"
+    summary = validate_artifact(state, key, directory / f"{key}-decomposition.md", "decomp-summary", artifacts_dir)
     main = sorted(directory.glob(f"{key}-E[0-9][0-9][0-9].md"))
     branches = sorted(directory.glob(f"{key}-BRANCH-*-E[0-9][0-9][0-9].md"))
     if not main or summary["epic_count"] not in {len(main), len(main) + len(branches)}:
         raise WorkloadError(f"{key}: summary epic count does not match generated files")
     for path in main + branches:
-        validate_artifact(state, key, path, "epic-task")
+        validate_artifact(state, key, path, "epic-task", artifacts_dir)
 
 
 def validate_completed(state, phase, ids):

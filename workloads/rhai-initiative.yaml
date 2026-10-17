@@ -14,6 +14,18 @@ source:
   processed_label: epic-creator-auto-decomposed
   handoff_type: initiative-strategy
   identity_fields: [strat_id, jira_key, source_initiative]
+submission:
+  project: RHAI
+  issue_type: Epic
+  parent:
+    relation: parent
+  dependency_link_type: Blocks
+  labels:
+    created: epic-creator-auto-created
+    investigation: epic-creator-investigation
+    implementation_prefix: epic-creator-impl-
+    ai_prefix: epic-creator-ai-impl-
+    needs_component: epic-creator-needs-component
 planning:
   artifact_template: workloads/policies/rhai/v1/artifacts.md
   scoring: workloads/policies/rhai/v1/scoring.yaml

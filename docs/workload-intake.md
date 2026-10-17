@@ -4,8 +4,8 @@ AISDLC-61 adds a validated intake registry, opt-in strategy fetching, workload
 provenance, and descriptor-bound local planning stages. The
 architecture remains [Proposed](ADRs/0001-descriptor-driven-planning-workloads.md).
 See [workload planning](workload-pipeline.md) for policy storage, stage validation
-and tests. Submission routing, recovery and production Fullsend configuration
-remain later review units.
+and tests. See [workload submission](workload-submission.md) for opt-in Jira
+submission and recovery. Production Fullsend configuration remains subsequent work.
 
 ## Existing invocation
 
@@ -74,9 +74,9 @@ key patterns, duplicate IDs and duplicate project/type bindings. Descriptors
 are data; they do not name executable plugins.
 
 The schema covers source identity, strategy body, ready labels, processed policy,
-handoff identity and optional planning policies. Intake-only descriptors remain
-valid; starting a pipeline requires `planning`. Submission requirements will
-extend the contract in a later AISDLC-61 review unit.
+handoff identity, optional planning policies and optional submission policies.
+Intake-only descriptors remain valid; starting a pipeline requires `planning`.
+Explicit submission requires both `planning` and `submission`.
 
 ## Local contract tests
 

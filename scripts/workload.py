@@ -114,6 +114,15 @@ def _tracker_binding(issue):
 
 
 @dataclass(frozen=True)
+class SubmissionPolicy:
+    project: str
+    issue_type: str
+    parent: dict
+    dependency_link_type: str
+    labels: dict
+
+
+@dataclass(frozen=True)
 class Workload:
     id: str
     version: int
@@ -129,6 +138,7 @@ class Workload:
     identity_fields: tuple
     digest: str
     planning: PlanningPolicy | None = None
+    submission: SubmissionPolicy | None = None
 
     def validate_identity(self, key, project, issue_type):
         if (project, issue_type) != (self.project, self.issue_type):
@@ -180,6 +190,7 @@ def load_registry(directory=None):
             digest = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             selected = Workload(data["id"], data["version"], digest=digest,
                                 planning=_load_planning(data.get("planning")),
+                                submission=SubmissionPolicy(**data["submission"]) if "submission" in data else None,
                                 **{**source, "ready_labels": tuple(source["ready_labels"]),
                                    "identity_fields": tuple(source["identity_fields"])})
             binding = (selected.project, selected.issue_type)
