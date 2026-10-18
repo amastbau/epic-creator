@@ -10,7 +10,7 @@ topics:
 # 1. Descriptor-driven planning workloads
 
 Date: 2026-10-11
-Updated: 2026-10-14 — add enablement discussion as architectural rationale.
+Updated: 2026-10-18 — align submission, recovery, execution boundaries and verification with the implementation.
 
 ## Status
 
@@ -18,12 +18,12 @@ Proposed — awaiting team review. The implementation PR is the review vehicle.
 
 ## Context
 
-Epic Decomposer currently wires RHAI planning behavior directly into its
+Before this change, Epic Decomposer wired RHAI planning behavior directly into its
 discovery, decomposition, review, revision, and Jira submission stages.
 [AISDLC-58](https://redhat.atlassian.net/browse/AISDLC-58) defines a pluggable
 planning pipeline across RFE Creator, Strategy Creator, and Epic Decomposer;
 [AISDLC-61](https://redhat.atlassian.net/browse/AISDLC-61) delivers the Epic
-Decomposer portion, with RHAI Initiatives as the first new production workload.
+Decomposer portion, with RHAI Initiatives as the first new target workload.
 
 The cross-stage handoff contract has been verified against the live upstream
 designs: strat-creator
@@ -103,12 +103,14 @@ Epic Decomposer adopts a descriptor-driven consuming architecture.
 A workload is defined by a versioned descriptor and registered in an in-repo
 registry (for example `workloads/rhai-initiative.yaml`). The descriptor names
 the source strategy contract, epic template and decomposition rules, review
-policy, component and dependency policy, tracker destination, labels and
-relationships, and evaluation set. The descriptor is data that references
+policy, scoring rules, components, review gate, tracker destination, labels and
+relationships. Evaluation sets remain in the separate evaluation configuration;
+the current descriptor schema does not select them. The descriptor is data that references
 reviewed in-repo policies; it does not load executable plugins.
 
 Descriptor selection resolves once at entry and persists in pipeline state.
-Jira intake selects the workload by the descriptor's `(project, issue_type)`
+The new path is explicitly selected with `--workload ID`; omission preserves
+the legacy RHAISTRAT invocation. Opt-in Jira intake resolves the descriptor's `(project, issue_type)`
 binding, then validates the source key and approval evidence. Strategy Creator
 does not publish a workload-specific Jira marker. The Initiative path retains
 the original Initiative identity (no `RHAISTRAT` clone); legacy artifacts with
@@ -125,6 +127,37 @@ artifact locations, and safety and validation instructions. Generated
 artifacts carry the workload identity and source provenance forward, and
 submission preflights the descriptor identity before the first Jira write.
 
+### Binding, execution and submission
+
+Intake-only descriptors remain valid. Planning requires a `planning` block;
+typed submission requires both `planning` and `submission`. Discovery JQL is
+still supplied by the caller. Production discovery configuration is separate
+from this implementation.
+
+Pipeline state and generated artifacts bind the workload ID/version, canonical
+descriptor digest, referenced planning-policy content digest and source
+provenance. Stage boundaries validate these bindings, including ordered review
+scores against the selected gate. Changed descriptors, policies or bound source
+revisions reject resume; typed artifacts need a fresh fetch and planning run.
+
+The planning skill ends at REPORT. Its state CLI returns worker jobs; an agent
+runtime executes the planning/review workers. Submission is a separate explicit
+`submit.py --workload ID` command. A credential-free dry run validates local
+artifacts without HTTP. Execution validates the full artifact set, review and
+dependency graph before writes, then rechecks live source approval and strategy
+freshness. Both shipped descriptors create RHAI Epics parented to the original
+source, with Blocks dependency links. Descriptors may instead configure a source
+link. Conditional plans remain attachments on a main Investigation, rather
+than separate issues. A main Epic's `gated_by` must name a main Investigation
+included in its dependencies.
+
+Submission uses stable identity labels and reviewed-plan fingerprints together
+with an atomically persisted, locally locked intent/key journal. Intent is saved
+before creation. Reruns recover known effects and reconcile missing relationships,
+labels and content-addressed evidence. Create/upload requests are not blindly
+retried after ambiguous outcomes; an unresolved prior create stops for later
+reconciliation. The source is marked processed only after all phases succeed.
+
 ## Consequences
 
 - Adding a workload means adding a validated descriptor and its policies, not
@@ -135,13 +168,34 @@ submission preflights the descriptor identity before the first Jira write.
 - The existing `RHAISTRAT` discovery, artifact, DAG, review, and submission
   behavior is preserved as a compatibility path.
 - Gate evaluation remains in Epic Decomposer, consistent with the
-  peer-pipeline design; the reserved `inputs:` vocabulary is lint-check only.
-- The Initiative no-clone path requires a `self` relation value in the handoff
-  contract, ruled with AISDLC-60; the current enum is `clones | parent | link`.
+  peer-pipeline design. The current descriptor schema has no `inputs:` field;
+  upstream handoff vocabulary is not an executable gate interface here.
+- Original Initiative identity is preserved through intake and provenance.
+  Submission's `parent | link` relation describes each generated Epic's
+  relationship to that source; it does not create a strategy clone or require
+  a `self` submission relation. Cross-stage handoff-schema coordination remains
+  separate from these local relationship settings.
 - The descriptor schema must stay cohesive as workloads grow, and the
   cross-stage contract must be versioned so stations can evolve without
   lockstep releases.
+- Recovery requires retaining the artifact directory and journal, serializing
+  independent workspaces and allowing for Jira search visibility/indexing.
+  Labels are not a global uniqueness constraint. A lost journal plus an
+  invisible or unindexed issue cannot guarantee duplicate prevention.
 - Changes to planning prompts and policies require model quality evaluations
   against the existing Epic Creator corpus. Deterministic flow tests verify
   orchestration and contracts; corpus evaluation remains outstanding for the
   extracted policies in PR #40.
+
+## Implementation and verification
+
+Intake, descriptor-bound planning, explicit submission and recovery are
+implemented in PR #40, including the follow-up fixes and tests in `04247fc`.
+Local verification passed 17 CLI-to-HTTPS E2E cases using synthetic credentials
+and a local Jira substitute. One tool-free real-model adapter example also
+passed; it does not establish general planning quality or native Skill/Agent
+dispatch. Reproduction commands and limits are documented in
+[`docs/workload-verification.md`](https://github.com/amastbau/epic-creator/blob/04247fcdb092cbc0065ae76ab3be630e507ea883/docs/workload-verification.md).
+Production Fullsend configuration, live approved-source submission and the
+complete policy-quality corpus remain unverified. None of this verification
+changes the ADR's Proposed status or constitutes team acceptance.
