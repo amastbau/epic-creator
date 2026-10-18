@@ -197,6 +197,34 @@ def test_rerun_has_no_duplicate_issues_links_or_attachments(case, monkeypatch):
     assert (jira.issues, jira.links, jira.writes) == before
 
 
+@pytest.mark.parametrize("branch", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_typed_submission_rejects_unknown_component_before_writes(case, monkeypatch, capsys, branch, dry_run):
+    root = setup(case)
+    _, jira = case
+    target = add_branch(root) if branch else root / "epic-tasks/RHOAIENG-9001-E002.md"
+    artifacts.update_frontmatter(target,
+                                {"component": "unregistered-component"}, "epic-task")
+    args = ["--dry-run"] if dry_run else []
+    assert run(monkeypatch, *args, "RHOAIENG-9001") == 1
+    assert jira.writes == []
+    assert "component" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_typed_dry_run_requires_component_cache(case, monkeypatch, capsys, empty):
+    setup(case)
+    registry, jira = case
+    cache = registry.parent / ".context/rhai-components.txt"
+    if empty:
+        cache.write_text("\n")
+    else:
+        cache.unlink()
+    assert run(monkeypatch, "--dry-run", "RHOAIENG-9001") == 1
+    assert jira.writes == []
+    assert "fetch_components" in capsys.readouterr().err
+
+
 def test_submission_uses_selected_destination_labels_and_link_policy(case, monkeypatch):
     registry, jira = case
     path = registry / "rhai-initiative.yaml"

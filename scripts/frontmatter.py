@@ -124,7 +124,7 @@ def _detect_schema_type(path):
 def cmd_schema(args):
     """Print the schema for a file type."""
     try:
-        yaml_str = get_schema_yaml(args.schema_type)
+        yaml_str = get_schema_yaml(args.schema_type, args.workload)
         print(yaml_str)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -224,6 +224,17 @@ def cmd_set(args):
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 
+    if schema_type == "epic-task" and "component" in data:
+        try:
+            existing, _ = read_frontmatter(args.file)
+            combined = {**existing, **data}
+            if combined.get("workload_id"):
+                from workload import get_workload
+                get_workload(combined["workload_id"]).planning.validate_component(data["component"])
+        except (OSError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     if os.path.exists(args.file):
         try:
             update_frontmatter(args.file, data, schema_type)
@@ -281,6 +292,7 @@ def main():
     p_schema.add_argument("schema_type",
                           choices=list(SCHEMAS.keys()),
                           help="Schema type to display")
+    p_schema.add_argument("--workload", help="Include the selected planning policy's field contract")
     p_schema.set_defaults(func=cmd_schema)
 
     # read

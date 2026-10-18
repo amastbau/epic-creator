@@ -30,7 +30,7 @@ def _digest(value):
 
 def preflight(selected, key, root):
     """Validate every local artifact, including conditional branches, before writes."""
-    from submit import _build_plan, _build_description, _load_valid_components
+    from submit import _build_plan, _build_description
 
     state = {"workload_id": selected.id, "workload_version": selected.version,
              "workload_digest": selected.digest, "planning_digest": selected.planning.digest,
@@ -85,7 +85,9 @@ def preflight(selected, key, root):
     except (CycleError, TypeError) as exc:
         raise WorkloadError(f"{key}: invalid dependency DAG") from exc
 
-    components = _load_valid_components(workload.WORKLOADS_DIR.parent / selected.planning.component_file)
+    components = selected.planning.canonical_components()
+    for _, data, _ in main + [entry for entries in branches.values() for entry in entries]:
+        selected.planning.validate_component(data["component"], components)
     plan = _build_plan(main, components, selected.submission)
     for entry in plan:
         identity = "epic-creator-id-" + _digest([selected.id, key, entry["epic_id"]])

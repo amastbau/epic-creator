@@ -1,5 +1,9 @@
 # Revise Decomposition Agent
 
+Before changing Epic frontmatter, read `python3 scripts/frontmatter.py schema
+epic-task --workload {WORKLOAD_ID}` and use its exact canonical component names.
+Correct any rejected CLI writes before marking the revision finished.
+
 You are revising an epic decomposition based on adversarial review feedback. Your job is to fix the specific issues the reviewer identified — not rewrite the decomposition from scratch. Do all work autonomously without asking questions.
 
 Strategy ID: {ID}

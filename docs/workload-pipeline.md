@@ -36,6 +36,18 @@ The dispatcher supplies `POLICY_FILE`, `ARTIFACT_TEMPLATE`, `COMPONENT_FILE`,
 `PASS_SCORE` and `MAX_SCORE` from the bound descriptor. RHAI scoring retains its
 existing investigation guards; versioned scoring data supplies the thresholds.
 
+Workers can inspect the selected frontmatter contract before writing:
+
+```bash
+python3 scripts/frontmatter.py schema epic-task --workload rhai-initiative
+python3 scripts/frontmatter.py schema decomp-review --workload rhai-initiative
+```
+
+The Epic contract lists canonical Jira component names from the selected cache.
+Typed Epic writes reject unknown names before changing frontmatter. The review
+contract gives ordered criterion scores and each issue's exact criterion-name
+enum. Rejected writes must be corrected before the worker marks its phase done.
+
 ## Run and resume
 
 In an agent environment that exposes the existing skill:

@@ -491,7 +491,7 @@ def model_worker(workspace, phase, agent):
     inputs = {str(p.relative_to(workspace.path)): p.read_text()
               for directory in [workspace.path / "artifacts", workspace.path / ".context"]
               for p in sorted(directory.rglob("*")) if p.is_file() and p.suffix in (".md", ".txt")}
-    schemas = {name: workspace.cli("frontmatter", "schema", name).stdout
+    schemas = {name: workspace.cli("frontmatter", "schema", name, "--workload", workspace.workload_id).stdout
                for name in ("epic-task", "decomp-summary", "decomp-review")}
     prompt = (
         f"Run the {phase} worker for the supplied strategy. Follow the actual shared prompt and selected policy below.\n"

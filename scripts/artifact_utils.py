@@ -406,7 +406,7 @@ def apply_defaults(data, schema_type):
     return data
 
 
-def get_schema_yaml(schema_type):
+def get_schema_yaml(schema_type, workload_id=None):
     """Return the schema definition as a YAML string for display."""
     if schema_type not in SCHEMAS:
         raise ValueError(
@@ -436,6 +436,29 @@ def get_schema_yaml(schema_type):
             output["required"][name] = entry
         else:
             output["optional"][name] = entry
+
+    if workload_id is not None:
+        from workload import get_workload
+        selected = get_workload(workload_id)
+        if selected.planning is None:
+            raise ValueError(f"{workload_id}: no planning policy")
+        policy = selected.planning
+        if schema_type == "decomp-review":
+            output["optional"].pop("criterion_scores", None)
+            output["required"]["criterion_scores"] = {
+                "type": "list", "length": len(policy.criteria),
+                "order": list(policy.criteria),
+                "items": {"type": "int", "minimum": 0, "maximum": policy.points_per_criterion},
+            }
+            output["optional"]["issues"]["items"] = {
+                "type": "dict", "fields": {
+                    "severity": {"type": "str", "enum": ["critical", "major", "minor"]},
+                    "criterion": {"type": "str", "enum": list(policy.criteria)},
+                    "description": {"type": "str"},
+                },
+            }
+        elif schema_type == "epic-task":
+            output["required"]["component"]["enum"] = sorted(policy.canonical_components())
 
     return yaml.dump(output, default_flow_style=False, sort_keys=False)
 

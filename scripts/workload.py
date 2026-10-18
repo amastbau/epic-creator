@@ -42,6 +42,25 @@ class PlanningPolicy:
     def max_score(self):
         return len(self.criteria) * self.points_per_criterion
 
+    def canonical_components(self):
+        """Require the selected workload's component cache before producing plans."""
+        path = WORKLOADS_DIR.parent / self.component_file
+        try:
+            names = {line.strip() for line in path.read_text().splitlines() if line.strip()}
+        except OSError as exc:
+            raise WorkloadError(
+                f"Cannot read {path}; run scripts/fetch_components.py for this workload") from exc
+        if not names:
+            raise WorkloadError(f"Empty {path}; run scripts/fetch_components.py for this workload")
+        return names
+
+    def validate_component(self, name, names=None):
+        names = self.canonical_components() if names is None else names
+        if name not in names:
+            raise WorkloadError(
+                f"Unknown {self.component_project} component {name!r}; "
+                f"choose an exact canonical name: {', '.join(sorted(names))}")
+
     def review_result(self, scores):
         if (not isinstance(scores, list) or len(scores) != len(self.criteria)
                 or any(type(s) is not int or not 0 <= s <= self.points_per_criterion for s in scores)):

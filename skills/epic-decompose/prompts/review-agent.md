@@ -32,6 +32,17 @@ Read `{POLICY_FILE}` and follow its rules for this stage.
 The dispatcher supplies `WORKLOAD_ID`, `COMPONENT_FILE`, `PASS_SCORE` and `MAX_SCORE`.
 These values are bound to pipeline state; do not choose another workload or policy.
 
+Read the selected producer contract before writing review frontmatter:
+
+```bash
+python3 scripts/frontmatter.py schema decomp-review --workload {WORKLOAD_ID}
+```
+
+Each issue's `criterion` must be an exact name from that schema's enum, rather
+than a criterion number. Keep `criterion_scores` in the displayed rubric order.
+If the CLI rejects the review, correct the reported fields and rerun it before
+finishing; a rejected write does not complete review.
+
 ## Step 4: Write Review File
 
 Write `artifacts/epic-reviews/{ID}-decomp-review.md` with a Review Summary and

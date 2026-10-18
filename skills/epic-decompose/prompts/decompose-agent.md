@@ -14,6 +14,16 @@ Read `{POLICY_FILE}` and `{ARTIFACT_TEMPLATE}` and follow their rules for this s
 The dispatcher supplies `WORKLOAD_ID`, `COMPONENT_FILE`, `PASS_SCORE` and `MAX_SCORE`.
 These values are bound to pipeline state; do not choose another workload or policy.
 
+Read the selected Epic field contract before producing artifacts:
+
+```bash
+python3 scripts/frontmatter.py schema epic-task --workload {WORKLOAD_ID}
+```
+
+Use an exact canonical `component` name from that schema. Architecture filenames
+are not necessarily Jira component names. If validation rejects a write, correct
+the reported fields and rerun it before marking the decomposition complete.
+
 ## Step 8: Generate Artifacts
 
 ### Step 8a: Write decomposition summary (the plan)

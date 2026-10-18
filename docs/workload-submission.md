@@ -3,7 +3,7 @@
 `submit.py --workload ID` submits reviewed, typed artifacts using the selected
 workload's destination and relationship policy. Both shipped descriptors create
 RHAI Epics under the original source issue, use Blocks dependency links, and retain
-the existing RHAI labels and component handling. Initiative submission keeps the
+the existing RHAI labels. Initiative submission keeps the
 RHOAIENG source key; it does not create a RHAISTRAT clone.
 
 The planning skill still ends at REPORT. Submission is a separate explicit step;
@@ -58,9 +58,11 @@ submission:
 using that type instead. Dependencies retain the existing inward=blocker,
 outward=blocked convention. The source's `processed_label` controls completion.
 The component cache comes from `planning.components`; its project must match the
-submission destination. A missing cache retains the legacy warning/passthrough
-behavior; an unknown component in an available cache is omitted and gets the
-descriptor's `needs_component` label.
+submission destination. Typed planning writes and submission require a populated
+cache and exact canonical component names. Missing caches and unknown components
+stop before Jira writes, including for conditional branches and dry runs. Refresh
+the cache with `scripts/fetch_components.py --workload ID`. The untyped legacy
+submission path retains its existing component warnings and fallback behavior.
 
 ## Validation and completion
 

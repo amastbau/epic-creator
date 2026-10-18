@@ -10,7 +10,7 @@ topics:
 # 1. Descriptor-driven planning workloads
 
 Date: 2026-10-11
-Updated: 2026-10-18 — align submission, recovery, execution boundaries and verification with the implementation.
+Updated: 2026-10-18 — align submission, recovery, producer contracts and verification with the implementation.
 
 ## Status
 
@@ -139,6 +139,13 @@ descriptor digest, referenced planning-policy content digest and source
 provenance. Stage boundaries validate these bindings, including ordered review
 scores against the selected gate. Changed descriptors, policies or bound source
 revisions reject resume; typed artifacts need a fresh fetch and planning run.
+
+The frontmatter CLI exposes the selected producer contract through
+`schema TYPE --workload ID`, including exact rubric criterion names and canonical
+component names. Typed Epic writes reject unknown components; typed submission
+requires the selected component cache and validates main and conditional plans
+before any Jira write. This avoids silently dropping a reviewed component from
+the submitted plan. Untyped legacy submission retains its compatibility behavior.
 
 The planning skill ends at REPORT. Its state CLI returns worker jobs; an agent
 runtime executes the planning/review workers. Submission is a separate explicit

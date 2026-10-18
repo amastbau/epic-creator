@@ -196,6 +196,51 @@ def test_cli_rejects_conflicting_explicit_provenance_before_write(monkeypatch, t
     assert not path.exists()
 
 
+def test_selected_review_schema_produces_a_valid_failing_review(monkeypatch, tmp_path, capsys):
+    init(monkeypatch, tmp_path, capsys)
+    write_source()
+    monkeypatch.setattr(sys, "argv", ["frontmatter.py", "schema", "decomp-review",
+                                    "--workload", "rhai-initiative"])
+    frontmatter.main()
+    schema = yaml.safe_load(capsys.readouterr().out)
+    criteria = schema["optional"]["issues"]["items"]["fields"]["criterion"]["enum"]
+    assert criteria[3] == "Type Correctness"
+    assert "criterion_scores" in schema["required"]
+    path = Path("artifacts/epic-reviews/RHOAIENG-9001-decomp-review.md")
+    issue = {"severity": "major", "criterion": criteria[3], "description": "Missing Investigation gate"}
+    cli_set(monkeypatch, path, "strat_id=RHOAIENG-9001", "score=11", "pass=false",
+            "recommendation=revise", "criterion_scores=[2,2,2,0,2,1,2]",
+            "issues=" + json.dumps([issue]))
+    review, _ = artifacts.read_frontmatter_validated(path, "decomp-review")
+    assert review["pass"] is False
+    assert review["issues"][0]["criterion"] == "Type Correctness"
+
+
+def test_cli_rejects_noncanonical_typed_component_without_changing_artifact(monkeypatch, tmp_path, capsys):
+    registry = tmp_path / "repo/workloads"
+    shutil.copytree(ROOT / "workloads", registry)
+    cache = registry.parent / ".context/rhai-components.txt"
+    cache.parent.mkdir()
+    cache.write_text("Model Validation\n")
+    monkeypatch.setattr(workload, "WORKLOADS_DIR", registry)
+    init(monkeypatch, tmp_path, capsys)
+    monkeypatch.setattr(sys, "argv", ["frontmatter.py", "schema", "epic-task",
+                                    "--workload", "rhai-initiative"])
+    frontmatter.main()
+    assert yaml.safe_load(capsys.readouterr().out)["required"]["component"]["enum"] == ["Model Validation"]
+    write_source()
+    path = Path("artifacts/epic-tasks/RHOAIENG-9001-E001.md")
+    data = generated(schema="epic-task")
+    data["component"] = "Model Validation"
+    artifacts.write_frontmatter(path, data, "epic-task", body="Reviewed work\n")
+    before = path.read_bytes()
+    with pytest.raises(SystemExit) as error:
+        cli_set(monkeypatch, path, "component=model-registry")
+    assert error.value.code == 1
+    assert path.read_bytes() == before
+    assert "Model Validation" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("branch", [False, True])
 def test_stage_rejects_missing_epic_provenance(monkeypatch, tmp_path, capsys, branch):
     init(monkeypatch, tmp_path, capsys)
