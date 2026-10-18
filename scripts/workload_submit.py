@@ -44,11 +44,11 @@ def preflight(selected, key, root):
 
     main, branches = [], {}
     for path in sorted((root / "epic-tasks").glob(f"{key}-*.md")):
-        if path.name == f"{key}-decomposition.md":
+        if path.name == f"{key}-decomposition.md" or path.name.endswith("-ai-signals.md"):
             continue
         data = validate_artifact(state, key, path, "epic-task", root)
         if re.fullmatch(rf"{re.escape(key)}-E\d{{3}}", path.stem):
-            if data.get("branch") or data.get("gated_by"):
+            if data.get("branch"):
                 raise WorkloadError(f"{path}: main epic cannot be conditional")
             main.append((str(path), data, artifacts.read_frontmatter(path)[1]))
         elif re.fullmatch(rf"{re.escape(key)}-BRANCH-[A-Z]-E\d{{3}}", path.stem):
@@ -72,8 +72,14 @@ def preflight(selected, key, root):
                 raise WorkloadError(f"{key}: conditional dependency outside its branch")
             graph[data["epic_id"]] = deps
     for _, data, _ in main:
-        if any(dep not in by_id for dep in data.get("dependencies", [])):
+        dependencies = data.get("dependencies", [])
+        if any(dep not in by_id for dep in dependencies):
             raise WorkloadError(f"{key}: unknown main epic dependency")
+        gate_id = data.get("gated_by")
+        if gate_id:
+            gate = by_id.get(gate_id)
+            if gate is None or gate["type"] != "Investigation" or gate_id not in dependencies:
+                raise WorkloadError(f"{key}: main epic has invalid Investigation gate")
     try:
         tuple(TopologicalSorter(graph).static_order())
     except (CycleError, TypeError) as exc:

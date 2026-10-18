@@ -69,6 +69,8 @@ conditional epic set, dependency DAG, passing review and matching source/workloa
 policy provenance. Malformed artifacts are errors, rather than silently skipped.
 Conditional branches must point to an existing main Investigation epic; their
 plans are attached to that gate and do not become Jira issues.
+A main Epic may also name an Investigation in `gated_by`; that gate must exist
+in the main plan and be included in the Epic's dependencies.
 
 Live execution rechecks source project/type, approval labels and the newest exact
 strategy attachment against the fetched attachment ID and timestamp. For
@@ -122,6 +124,9 @@ an epic away from a different existing parent. Legacy cleanup/re-decomposition
 commands have not been expanded; do not use them to reset a typed submission.
 
 ## Tests
+
+For CLI-to-HTTPS end-to-end checks and optional real-model planning without live
+Jira writes, see [workload verification](workload-verification.md).
 
 ```bash
 python3 -m pytest -q tests/test_workload_submit.py
