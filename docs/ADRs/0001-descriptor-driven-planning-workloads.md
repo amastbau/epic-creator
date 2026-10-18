@@ -145,5 +145,3 @@ submission preflights the descriptor identity before the first Jira write.
   against the existing Epic Creator corpus. Deterministic flow tests verify
   orchestration and contracts; corpus evaluation remains outstanding for the
   extracted policies in PR #40.
-
-Assisted-by: Codex

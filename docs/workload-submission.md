@@ -135,5 +135,3 @@ lost responses, key-persistence failures, each partial phase, stale searches,
 duplicate/conflicting identities and invalid inputs. These establish local
 submission behavior; they do not establish production Jira configuration or
 model quality. No live Jira issues were created during implementation.
-
-Assisted-by: Codex

@@ -104,5 +104,3 @@ workspace so existing model evaluations can load them.
 The full suite has a known upstream failure in
 `tests/test_submit.py::TestDryRun::test_dry_run_shows_component_warning` when local
 component context is absent. Report it separately from workload failures.
-
-Assisted-by: Codex

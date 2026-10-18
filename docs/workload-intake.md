@@ -91,5 +91,3 @@ the real registry, schema validators, CLI handlers and filesystem. On upstream
 `1544ef1`, the complete baseline suite has one known failure:
 `tests/test_submit.py::TestDryRun::test_dry_run_shows_component_warning`.
 Report that separately from new intake failures.
-
-Assisted-by: Codex
