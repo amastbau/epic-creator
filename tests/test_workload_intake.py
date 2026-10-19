@@ -120,13 +120,19 @@ def test_new_binding_can_resolve_from_an_added_descriptor(tmp_path):
     assert selected.id == "synthetic-initiative"
 
 
-def test_initiative_uses_newest_exact_key_attachment(tmp_path):
+@pytest.mark.parametrize("newest,older", [
+    ("2026-10-13T09:00:00Z", "2026-10-13T10:00:00+02:00"),
+    ("2026-10-13T09:00:00.000+0000", "2026-10-13T10:00:00.000+0200"),
+    ("2026-10-13T04:00:00.000-0500", "2026-10-13T10:00:00.000+0200"),
+])
+def test_initiative_uses_newest_exact_key_attachment(tmp_path, newest, older):
     module = registry_module()
     data = issue()
+    data["fields"]["attachment"][0]["created"] = newest
     data["fields"]["attachment"] += [
         {"id": "9002", "filename": "RHOAIENG-9001-strategy.md",
          "content": "https://jira.example.com/att/old", "size": 20,
-         "created": "2026-10-13T10:00:00+02:00"},
+         "created": older},
         {"id": "9003", "filename": "RHOAIENG-9002-strategy.md",
          "content": "https://jira.example.com/att/wrong", "size": 20,
          "created": "2026-10-13T12:00:00Z"},
@@ -151,7 +157,7 @@ def test_initiative_uses_newest_exact_key_attachment(tmp_path):
     assert fm["source_issue_type"] == "Initiative"
     assert fm["source_revision"] == "2026-10-13T10:00:00Z"
     assert fm["attachment_id"] == "9001"
-    assert fm["attachment_created"] == "2026-10-13T09:00:00Z"
+    assert fm["attachment_created"] == newest
 
 
 def test_missing_initiative_attachment_skips_without_writing(tmp_path):
@@ -205,6 +211,54 @@ def test_batch_does_not_skip_initiative_with_handmade_epics(tmp_path, monkeypatc
     assert Path("ids.txt").read_text() == "RHOAIENG-9001\n"
     assert not Path("artifacts/strat-tasks/RHOAIENG-9003.md").exists()
     assert not Path("artifacts/strat-tasks/RHOAIENG-9004.md").exists()
+
+
+@pytest.mark.parametrize("failure", ["download", "timestamp", "frontmatter", "utf8", "empty"])
+def test_batch_keeps_good_sources_around_a_bad_attachment(tmp_path, monkeypatch, capsys, failure):
+    monkeypatch.chdir(tmp_path)
+    bad = issue("RHOAIENG-9002")
+    if failure == "timestamp":
+        bad["fields"]["attachment"][0]["created"] = "not-a-timestamp"
+
+    def download(url, user, token, server):
+        if url.endswith("/bad"):
+            if failure == "download":
+                raise urllib.error.URLError("synthetic download failure")
+            return {"frontmatter": b"---\nstrat_id: [\n---\n# Invalid",
+                    "utf8": b"\xff", "empty": b""}[failure]
+        return b"# Approved strategy"
+
+    bad["fields"]["attachment"][0]["content"] = "https://jira.example.com/att/bad"
+    with patch("fetch_strategy.require_env", return_value=("https://jira.example.com", "u", "t")), \
+         patch("fetch_strategy._search_issues", return_value=[issue(), bad, issue("RHOAIENG-9003")]), \
+         patch("fetch_strategy.download_attachment", side_effect=download):
+        fetch_strategy.cmd_fetch(["project = RHOAIENG", "--ids-file", "ids.txt",
+                                  "--workload", "rhai-initiative"])
+
+    assert Path("ids.txt").read_text() == "RHOAIENG-9001\nRHOAIENG-9003\n"
+    assert not Path("artifacts/strat-tasks/RHOAIENG-9002.md").exists()
+    for key in ("RHOAIENG-9001", "RHOAIENG-9003"):
+        metadata, body = artifact_utils.read_frontmatter_validated(
+            f"artifacts/strat-tasks/{key}.md", "strat-task")
+        assert metadata["source_key"] == key
+        assert body.strip() == "# Approved strategy"
+    stderr = capsys.readouterr().err
+    assert "ERROR: Skipped RHOAIENG-9002:" in stderr
+    assert "Skipped 1 strategies" in stderr
+    assert "Fetched 2 strategies" in stderr
+
+
+@pytest.mark.parametrize("created", [None, "not-a-timestamp", "2026-10-13T09:00:00"])
+def test_fetch_one_rejects_invalid_attachment_timestamp(tmp_path, monkeypatch, created):
+    monkeypatch.chdir(tmp_path)
+    data = issue()
+    data["fields"]["attachment"][0]["created"] = created
+    with patch("fetch_strategy.require_env", return_value=("https://jira.example.com", "u", "t")), \
+         patch("fetch_strategy.get_issue", return_value=data), \
+         patch("fetch_strategy.download_attachment", side_effect=AssertionError("Invalid metadata")):
+        with pytest.raises(registry_module().WorkloadError, match="invalid attachment timestamp"):
+            fetch_strategy.cmd_fetch_one([data["key"], "--workload", "rhai-initiative"])
+    assert not Path("artifacts").exists()
 
 
 def test_legacy_artifact_has_no_added_workload_metadata(tmp_path):

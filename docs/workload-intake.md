@@ -22,7 +22,7 @@ for read operations. Do not put their values in files or command history.
 
 ```bash
 python3 scripts/fetch_strategy.py fetch \
-  'project = RHOAIENG AND issuetype = Initiative AND labels = strat-creator-rubric-pass AND labels = strat-creator-human-sign-off' \
+  'project = RHOAIENG AND issuetype = Initiative AND labels = strat-creator-rubric-pass AND labels = strat-creator-human-sign-off AND labels != epic-creator-auto-decomposed' \
   --workload rhai-initiative --skip-if-processed --ids-file tmp/initiative-ids.txt
 
 python3 scripts/fetch_strategy.py fetch-one RHOAIENG-9001 \
@@ -32,6 +32,8 @@ python3 scripts/fetch_strategy.py fetch-one RHOAIENG-9001 \
 The query deliberately has no Target Version condition. This slice continues
 to accept caller-supplied JQL; moving production discovery queries into the
 descriptor is a later configuration change.
+The query excludes processed Initiatives before Jira applies `--limit`;
+`--skip-if-processed` also checks the returned issues locally.
 
 Both commands resolve the fetched issue's project and issue type, then check
 that they agree with `--workload` and its key grammar. A key prefix alone never
@@ -41,8 +43,11 @@ fields must agree with the selected source contract.
 
 Intake reads the newest exact `{key}-strategy.md` attachment, comparing upload
 timestamps with timezone offsets. A missing Initiative attachment skips the
-source; a failed download, invalid body or conflicting identity fails without
-using the Initiative description. Batch IDs include only written strategies.
+source; a failed download, invalid body or conflicting identity rejects that
+source without using the Initiative description. Batch intake reports these
+source errors on stderr, continues with other issues and writes only successful
+strategies to the IDs file. `fetch-one` fails on a rejected source. Registry
+and tracker-binding errors still stop a batch before writing strategies.
 `--skip-if-processed` uses the descriptor's policy: for Initiatives, only
 `epic-creator-auto-decomposed` marks the source processed. Hand-made child
 Epics and Incorporates links do not cause an Initiative skip. Fetching and

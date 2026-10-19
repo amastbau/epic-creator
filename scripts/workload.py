@@ -3,6 +3,8 @@
 Descriptors bind intake identity and reviewed, repository-owned planning
 policies. They never load executable plugins.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
 import json
 import hashlib

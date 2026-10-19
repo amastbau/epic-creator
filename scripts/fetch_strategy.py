@@ -50,7 +50,9 @@ def _select_strategy_attachment(attachments, key, workload=None):
     if workload:
         def created(attachment):
             try:
-                value = datetime.fromisoformat(attachment["created"].replace("Z", "+00:00"))
+                timestamp = attachment["created"].replace("Z", "+00:00")
+                timestamp = re.sub(r"([+-]\d\d)(\d\d)$", r"\1:\2", timestamp)
+                value = datetime.fromisoformat(timestamp)
                 if value.tzinfo is None:
                     raise ValueError("missing timezone")
                 return value
@@ -266,7 +268,14 @@ def cmd_fetch(args):
                   file=sys.stderr)
             skipped += 1
             continue
-        path = _write_strategy(issue, server=server, user=user, token=token, workload=workload)
+        try:
+            path = _write_strategy(issue, server=server, user=user, token=token, workload=workload)
+        except WorkloadError as exc:
+            if workload is None:
+                raise
+            print(f"ERROR: Skipped {key}: {exc}", file=sys.stderr)
+            skipped += 1
+            continue
         if path is None:
             skipped += 1
             continue
