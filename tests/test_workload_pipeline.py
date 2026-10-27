@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import artifact_utils as artifacts
 import pipeline_state as pipeline
+import pipeline_status
 import workload
 import frontmatter
 
@@ -136,9 +137,15 @@ def test_completed_source_without_metadata_cannot_release_fetch(monkeypatch, tmp
     path.parent.mkdir(parents=True)
     path.write_text("Already cached but unidentifiable\n")
     pipeline.cmd_set_phase(["FETCH"])
-    with pytest.raises(workload.WorkloadError):
-        pipeline.cmd_next_action([])
-    assert pipeline._load_state()["phase"] == "FETCH"
+    capsys.readouterr()
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["action"] == "run_script"
+    assert action["phase"] == "REPORT"
+    assert pipeline._load_state()["phase"] == "REPORT"
+    status = pipeline_status.read_status("RHOAIENG-9001")
+    assert status["status"] == "invalid"
+    assert "No frontmatter" in status["message"]
 
 
 def test_review_gate_rejects_zero_dimension_despite_high_total():
@@ -256,9 +263,13 @@ def test_stage_rejects_missing_epic_provenance(monkeypatch, tmp_path, capsys, br
     del data["planning_digest"]
     artifacts.write_frontmatter(path, data, "epic-task", body=body)
     pipeline.cmd_set_phase(["DECOMPOSE"])
-    with pytest.raises(workload.WorkloadError, match="provenance"):
-        pipeline.cmd_next_action([])
-    assert pipeline._load_state()["phase"] == "DECOMPOSE"
+    capsys.readouterr()
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["phase"] == "REPORT"
+    status = pipeline_status.read_status("RHOAIENG-9001")
+    assert status["status"] == "invalid"
+    assert "provenance" in status["message"]
 
 
 def test_completed_summary_without_epics_cannot_release_stage(monkeypatch, tmp_path, capsys):
@@ -266,18 +277,62 @@ def test_completed_summary_without_epics_cannot_release_stage(monkeypatch, tmp_p
     write_source()
     artifacts.write_frontmatter("artifacts/epic-tasks/RHOAIENG-9001-decomposition.md", generated(), "decomp-summary")
     pipeline.cmd_set_phase(["DECOMPOSE"])
-    with pytest.raises(workload.WorkloadError, match="count"):
-        pipeline.cmd_next_action([])
+    capsys.readouterr()
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["phase"] == "REPORT"
+    status = pipeline_status.read_status("RHOAIENG-9001")
+    assert status["status"] == "invalid"
+    assert "count" in status["message"]
+
+
+def test_one_invalid_strategy_does_not_block_valid_strategy(monkeypatch, tmp_path, capsys):
+    import generate_run_report
+
+    init(monkeypatch, tmp_path, capsys)
+    good, bad = "RHOAIENG-9001", "RHOAIENG-9002"
+    write_source(good)
+    write_source(bad)
+    write_decomposition(good)
+    write_decomposition(bad)
+    bad_epic = Path(f"artifacts/epic-tasks/{bad}-E001.md")
+    bad_epic.write_text(bad_epic.read_text().replace(
+        selected().planning.digest, "conflicting-policy", 1))
+    pipeline._write_ids("tmp/pipeline-active-ids.txt", [good, bad])
+    pipeline._write_ids("tmp/pipeline-all-ids.txt", [good, bad])
+    pipeline.cmd_set_phase(["DECOMPOSE"])
+    capsys.readouterr()
+
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["action"] == "launch_wave"
+    assert action["phase"] == "REVIEW_DECOMP"
+    assert f"ID={good}" in action["agents"][0]["vars"]
+    assert pipeline._read_ids("tmp/pipeline-active-ids.txt") == [good]
+    assert pipeline_status.read_status(bad)["status"] == "invalid"
+
+    monkeypatch.setattr(sys, "argv", ["generate_run_report.py", "--start-time",
+                                      "2026-10-13T10:00:00Z"])
+    generate_run_report.main()
+    report = yaml.safe_load(next(Path("artifacts/decompose-runs").glob("*.yaml")).read_text())
+    assert [item["status"] for item in report["results"]] == ["decomposed", "invalid"]
 
 
 def test_source_revision_change_is_rejected_on_resume(monkeypatch, tmp_path, capsys):
     init(monkeypatch, tmp_path, capsys)
     path = write_source()
     pipeline.cmd_set_phase(["FETCH"])
+    capsys.readouterr()
     pipeline.cmd_next_action([])
+    first_action = yaml.safe_load(capsys.readouterr().out)
+    assert first_action["phase"] == "DECOMPOSE"
     artifacts.update_frontmatter(path, {"source_revision": "2026-10-14T10:00:00Z"}, "strat-task")
-    with pytest.raises(workload.WorkloadError, match="revision"):
-        pipeline.cmd_next_action([])
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["phase"] == "REPORT"
+    status = pipeline_status.read_status("RHOAIENG-9001")
+    assert status["status"] == "invalid"
+    assert "revision" in status["message"]
 
 
 @pytest.mark.parametrize("changes", [{"score": 13}, {"pass": False}, {"recommendation": "revise"},
@@ -295,8 +350,13 @@ def test_review_metadata_must_agree_with_selected_rubric(monkeypatch, tmp_path, 
 def test_dispatch_rejects_unsafe_or_wrong_workload_ids_before_launch(monkeypatch, tmp_path, capsys, key):
     init(monkeypatch, tmp_path, capsys, key)
     pipeline.cmd_set_phase(["FETCH"])
-    with pytest.raises(workload.WorkloadError):
-        pipeline.cmd_next_action([])
+    capsys.readouterr()
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["action"] == "run_script"
+    assert action["phase"] == "REPORT"
+    assert pipeline._read_ids("tmp/pipeline-active-ids.txt") == []
+    assert pipeline_status.read_status(key)["status"] == "invalid"
 
 
 def test_report_records_workload_and_source_revision(monkeypatch, tmp_path, capsys):
@@ -314,13 +374,55 @@ def test_report_records_workload_and_source_revision(monkeypatch, tmp_path, caps
     assert report["results"][0]["source_revision"] == source()["source_revision"]
 
 
+def test_report_includes_skipped_fetch_status(monkeypatch, tmp_path, capsys):
+    from check_decompose_progress import check_id
+    import generate_run_report
+
+    init(monkeypatch, tmp_path, capsys)
+    key = "RHOAIENG-9001"
+    pipeline_status.write_status(key, "skipped", "fetch", "no strategy attachment")
+    assert check_id("fetch", key) == "completed"
+
+    monkeypatch.setattr(sys, "argv", ["generate_run_report.py", "--start-time",
+                                      "2026-10-13T10:00:00Z"])
+    generate_run_report.main()
+    report = yaml.safe_load(next(Path("artifacts/decompose-runs").glob("*.yaml")).read_text())
+    assert report["total"] == 1
+    assert report["results"] == [{"strat_id": key, "status": "skipped",
+                                  "message": "no strategy attachment"}]
+
+
+def test_report_records_invalid_strategy_and_continues(monkeypatch, tmp_path, capsys):
+    import generate_run_report
+
+    init(monkeypatch, tmp_path, capsys)
+    bad, good = "RHOAIENG-9001", "RHOAIENG-9002"
+    bad_source = write_source(bad)
+    write_source(good)
+    artifacts.update_frontmatter(bad_source, {"labels": []}, "strat-task")
+    write_decomposition(good)
+    pipeline._write_ids("tmp/pipeline-all-ids.txt", [bad, good])
+
+    monkeypatch.setattr(sys, "argv", ["generate_run_report.py", "--start-time",
+                                      "2026-10-13T10:00:00Z"])
+    generate_run_report.main()
+    report = yaml.safe_load(next(Path("artifacts/decompose-runs").glob("*.yaml")).read_text())
+    assert [item["status"] for item in report["results"]] == ["invalid", "decomposed"]
+    assert "approval" in report["results"][0]["message"]
+
+
 def test_cached_source_requires_original_approval_evidence(monkeypatch, tmp_path, capsys):
     init(monkeypatch, tmp_path, capsys)
     path = write_source()
     artifacts.update_frontmatter(path, {"labels": []}, "strat-task")
     pipeline.cmd_set_phase(["FETCH"])
-    with pytest.raises(workload.WorkloadError, match="approval"):
-        pipeline.cmd_next_action([])
+    capsys.readouterr()
+    pipeline.cmd_next_action([])
+    action = yaml.safe_load(capsys.readouterr().out)
+    assert action["phase"] == "REPORT"
+    status = pipeline_status.read_status("RHOAIENG-9001")
+    assert status["status"] == "invalid"
+    assert "approval" in status["message"]
 
 
 def test_component_fetch_uses_selected_policy(monkeypatch, tmp_path, capsys):
@@ -339,7 +441,10 @@ def test_component_fetch_uses_selected_policy(monkeypatch, tmp_path, capsys):
          patch.object(fetch_components, "api_call_with_retry", return_value=[{"name": "Synthetic Component"}]) as api:
         fetch_components.main(["--workload", "rhai-initiative"])
     api.assert_called_once_with("https://jira.example.com", "/project/EXAMPLE/components", "u", "t")
-    assert Path(".context/example-components.txt").read_text() == "Synthetic Component\n"
+    canonical = registry.parent / ".context/example-components.txt"
+    assert canonical.read_text() == "Synthetic Component\n"
+    assert selected().planning.canonical_components() == {"Synthetic Component"}
+    assert not Path(".context/example-components.txt").exists()
 
 
 def test_report_preserves_missing_source_failure(monkeypatch, tmp_path, capsys):

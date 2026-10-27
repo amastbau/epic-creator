@@ -9,7 +9,7 @@ import re
 import shutil
 import socket
 import sys
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 
 import pytest
@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import artifact_utils as artifacts
 import submit
 import workload
+import workload_submit
 
 
 class Response(io.BytesIO):
@@ -325,6 +326,28 @@ def test_uncertain_create_and_stale_search_never_recreates(case, monkeypatch):
     jira.hidden = False
     assert run(monkeypatch, "RHOAIENG-9001") == 0
     assert len(jira.issues) == 3
+
+
+@pytest.mark.parametrize(("status_code", "record_expected"), [(400, False), (503, True)])
+def test_create_http_error_clears_only_definite_rejection(
+        case, monkeypatch, status_code, record_expected):
+    setup(case)
+    _, jira = case
+
+    def reject_create(*args, **kwargs):
+        raise HTTPError("https://jira.example.test/rest/api/3/issue",
+                        status_code, "synthetic Jira response", {}, None)
+
+    monkeypatch.setattr(workload_submit.jira, "create_issue", reject_create)
+    assert run(monkeypatch, "RHOAIENG-9001") == 1
+
+    journal = json.loads(Path("artifacts/submissions/rhai-initiative/RHOAIENG-9001.json").read_text())
+    epic_record = journal["epics"].get("RHOAIENG-9001-E001")
+    assert (epic_record is not None) is record_expected
+    if record_expected:
+        assert epic_record["attempted"] is True
+        assert epic_record["jira_key"] is None
+    assert jira.writes == []
 
 
 @pytest.mark.parametrize("corrupt_record", [None, {}])

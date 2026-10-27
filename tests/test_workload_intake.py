@@ -17,6 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import artifact_utils
 import fetch_strategy
+import pipeline_status
 
 
 def registry_module():
@@ -246,6 +247,39 @@ def test_batch_keeps_good_sources_around_a_bad_attachment(tmp_path, monkeypatch,
     assert "ERROR: Skipped RHOAIENG-9002:" in stderr
     assert "Skipped 1 strategies" in stderr
     assert "Fetched 2 strategies" in stderr
+
+
+def test_batch_skips_wrong_tracker_binding_without_losing_valid_sources(
+        tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    wrong_binding = issue("RHOAIENG-9002", project="OTHER")
+    with patch("fetch_strategy.require_env", return_value=("https://jira.example.com", "u", "t")), \
+         patch("fetch_strategy._search_issues",
+               return_value=[issue(), wrong_binding, issue("RHOAIENG-9003")]), \
+         patch("fetch_strategy.download_attachment", return_value=b"# Approved strategy"):
+        fetch_strategy.cmd_fetch(["project = RHOAIENG", "--ids-file", "ids.txt",
+                                  "--workload", "rhai-initiative"])
+
+    assert Path("ids.txt").read_text() == "RHOAIENG-9001\nRHOAIENG-9003\n"
+    status = pipeline_status.read_status("RHOAIENG-9002")
+    assert status["status"] == "invalid"
+    assert "tracker binding" in status["message"]
+    assert "ERROR: Skipped RHOAIENG-9002" in capsys.readouterr().err
+
+
+def test_fetch_one_without_attachment_marks_source_skipped(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    data = issue()
+    data["fields"]["attachment"] = []
+    with patch("fetch_strategy.require_env", return_value=("https://jira.example.com", "u", "t")), \
+         patch("fetch_strategy.get_issue", return_value=data):
+        fetch_strategy.cmd_fetch_one([data["key"], "--workload", "rhai-initiative"])
+
+    status = pipeline_status.read_status(data["key"])
+    assert status["status"] == "skipped"
+    assert status["message"] == "no strategy attachment"
+    assert "SKIPPED RHOAIENG-9001" in capsys.readouterr().err
+    assert not Path("artifacts/strat-tasks/RHOAIENG-9001.md").exists()
 
 
 @pytest.mark.parametrize("created", [None, "not-a-timestamp", "2026-10-13T09:00:00"])

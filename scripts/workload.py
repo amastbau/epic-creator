@@ -44,9 +44,14 @@ class PlanningPolicy:
     def max_score(self):
         return len(self.criteria) * self.points_per_criterion
 
+    @property
+    def component_path(self):
+        """Canonical cache location shared by writers and readers."""
+        return WORKLOADS_DIR.parent / self.component_file
+
     def canonical_components(self):
         """Require the selected workload's component cache before producing plans."""
-        path = WORKLOADS_DIR.parent / self.component_file
+        path = self.component_path
         try:
             names = {line.strip() for line in path.read_text().splitlines() if line.strip()}
         except OSError as exc:
