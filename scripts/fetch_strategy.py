@@ -19,6 +19,7 @@ from jira_utils import (require_env, get_issue, api_call_with_retry,
 import re
 import yaml
 from artifact_utils import ValidationError, parse_frontmatter, write_frontmatter
+from pipeline_status import clear_status, write_status
 from workload import WorkloadError, get_workload, load_registry, resolve_issue
 
 
@@ -250,33 +251,47 @@ def cmd_fetch(args):
         sys.exit(1)
 
     issues = _search_issues(server, user, token, opts.jql, opts.limit)
-    workloads = ([resolve_issue(issue, opts.workload, registry) for issue in issues]
-                 if registry is not None else [None] * len(issues))
 
     all_keys = []
     skipped = 0
-    for issue, workload in zip(issues, workloads):
-        key = issue["key"]
-        if workload and workload.skip_policy == "processed-label":
-            processed = workload.processed_label in (issue["fields"].get("labels") or [])
-        elif opts.skip_if_has_epics:
-            processed = _has_existing_epics(issue, server, user, token)
-        else:
-            processed = False
-        if opts.skip_if_has_epics and processed:
-            print(f"Skipped {key}: already processed",
-                  file=sys.stderr)
+    for issue in issues:
+        key = issue.get("key")
+        if not key:
+            print("ERROR: Skipped issue without a Jira key", file=sys.stderr)
             skipped += 1
             continue
+        clear_status(key)
         try:
-            path = _write_strategy(issue, server=server, user=user, token=token, workload=workload)
+            selected = resolve_issue(issue, opts.workload, registry) if registry is not None else None
         except WorkloadError as exc:
-            if workload is None:
+            write_status(key, "invalid", "fetch", str(exc))
+            print(f"ERROR: Skipped {key}: {exc}", file=sys.stderr)
+            skipped += 1
+            continue
+
+        try:
+            if selected and selected.skip_policy == "processed-label":
+                processed = selected.processed_label in (issue["fields"].get("labels") or [])
+            elif opts.skip_if_has_epics:
+                processed = _has_existing_epics(issue, server, user, token)
+            else:
+                processed = False
+            if opts.skip_if_has_epics and processed:
+                write_status(key, "skipped", "fetch", "already processed")
+                print(f"Skipped {key}: already processed", file=sys.stderr)
+                skipped += 1
+                continue
+            path = _write_strategy(issue, server=server, user=user, token=token,
+                                   workload=selected)
+        except WorkloadError as exc:
+            if selected is None:
                 raise
+            write_status(key, "invalid", "fetch", str(exc))
             print(f"ERROR: Skipped {key}: {exc}", file=sys.stderr)
             skipped += 1
             continue
         if path is None:
+            write_status(key, "skipped", "fetch", "no strategy attachment")
             skipped += 1
             continue
         all_keys.append(key)
@@ -301,21 +316,28 @@ def cmd_fetch_one(args):
     parser.add_argument("--workload", help="Opt in to a registered intake workload")
     opts = parser.parse_args(args)
     key = opts.key
-    registry = load_registry() if opts.workload else None
-    if registry is not None:
-        get_workload(opts.workload, registry)
-    server, user, token = require_env()
-    if not all([server, user, token]):
-        print("ERROR: JIRA_SERVER, JIRA_USER, and JIRA_TOKEN must be set",
-              file=sys.stderr)
-        sys.exit(1)
-    issue = _fetch_issue(server, user, token, key)
-    if not issue:
-        sys.exit(1)
-    workload = resolve_issue(issue, opts.workload, registry) if registry is not None else None
-    path = _write_strategy(issue, server=server, user=user, token=token, workload=workload)
-    if path is not None:
+    clear_status(key)
+    try:
+        registry = load_registry() if opts.workload else None
+        if registry is not None:
+            get_workload(opts.workload, registry)
+        server, user, token = require_env()
+        if not all([server, user, token]):
+            raise WorkloadError("JIRA_SERVER, JIRA_USER, and JIRA_TOKEN must be set")
+        issue = _fetch_issue(server, user, token, key)
+        if not issue:
+            raise WorkloadError(f"{key}: Jira returned no issue")
+        selected = resolve_issue(issue, opts.workload, registry) if registry is not None else None
+        path = _write_strategy(issue, server=server, user=user, token=token,
+                               workload=selected)
+        if path is None:
+            write_status(key, "skipped", "fetch", "no strategy attachment")
+            print(f"SKIPPED {key}: no strategy attachment", file=sys.stderr)
+            return
         print(path)
+    except Exception as exc:
+        write_status(key, "invalid", "fetch", str(exc))
+        raise
 
 
 COMMANDS = {

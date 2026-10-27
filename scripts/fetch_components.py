@@ -18,7 +18,7 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(__file__))
 from jira_utils import require_env, api_call_with_retry
-from workload import get_workload, WorkloadError
+from workload import WORKLOADS_DIR, get_workload, WorkloadError
 
 PROJECT = "RHAI"
 OUTPUT_PATH = os.path.join(
@@ -54,7 +54,8 @@ def main(args=None):
         selected = get_workload(opts.workload)
         if selected.planning is None:
             raise WorkloadError("Selected workload has no component policy")
-        project, output = selected.planning.component_project, selected.planning.component_file
+        project = selected.planning.component_project
+        output = str(WORKLOADS_DIR.parent / selected.planning.component_file)
     if os.environ.get("EPIC_SKIP_COMPONENT_FETCH"):
         print("EPIC_SKIP_COMPONENT_FETCH set - skipping component fetch")
         return

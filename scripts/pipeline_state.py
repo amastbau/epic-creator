@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 import yaml
 from pipeline_workload import (BOUND_FIELDS, bound_workload, phase_config,
                                validate_ids, validate_completed, validate_inputs)
+from pipeline_status import (all_statuses, clear_all_statuses, clear_status,
+                             read_status, write_status)
 from workload import WorkloadError, get_workload
 
 STATE_FILE = "tmp/pipeline-state.yaml"
@@ -171,6 +173,37 @@ def _copy_ids(src, dst):
     shutil.copy2(src, dst)
 
 
+def _validate_ids_individually(state, phase, ids_file, validator):
+    """Keep one bad source from stopping the rest of a batch."""
+    ids = _read_ids(ids_file)
+    valid_ids = []
+    for key in ids:
+        status = read_status(key)
+        if status:
+            # Invalid sources are retried through ERROR_COLLECT. Intentional
+            # skips are terminal and stay out of downstream phases.
+            continue
+        try:
+            validator(state, phase, key)
+        except WorkloadError as exc:
+            write_status(key, "invalid", phase.lower(), str(exc))
+            print(f"{phase}: {key} invalid: {exc}", file=sys.stderr)
+            continue
+        valid_ids.append(key)
+
+    if valid_ids != ids:
+        _write_ids(ids_file, valid_ids)
+    return valid_ids
+
+
+def _validate_completed_one(state, phase, key):
+    validate_completed(state, phase, [key])
+
+
+def _validate_inputs_one(state, phase, key):
+    validate_inputs(state, phase, [key])
+
+
 def _reset_revised_flag(decomp_path):
     """Remove ``revised`` key from decomposition frontmatter.
 
@@ -226,7 +259,8 @@ def advance(state, dry_run=False):
     phase = state["phase"]
     if not dry_run and phase in ("FETCH", "DECOMPOSE", "REVIEW_DECOMP", "REVISE_DECOMP", "RE_REVIEW", "RE_REVISE"):
         config = _phase_config(state)
-        validate_completed(state, phase, _read_ids(config["ids_file"]))
+        _validate_ids_individually(
+            state, phase, config["ids_file"], _validate_completed_one)
 
     # --- BATCH_START: reset counters, populate active IDs ---
     if phase == "BATCH_START":
@@ -234,6 +268,11 @@ def advance(state, dry_run=False):
         if not dry_run:
             state["batch"] = batch
             batch_file = f"tmp/pipeline-batch-{batch}-ids.txt"
+            if state.get("retry_cycle", 0) > 0:
+                for key in _read_ids(batch_file):
+                    status = read_status(key)
+                    if status and status["status"] == "invalid":
+                        clear_status(key)
             _copy_ids(batch_file, "tmp/pipeline-active-ids.txt")
         return "FETCH", f"BATCH_START → FETCH: batch={batch}"
 
@@ -347,7 +386,14 @@ def advance(state, dry_run=False):
             # Check for errors
             all_ids = _read_ids("tmp/pipeline-all-ids.txt")
             error_ids = []
+            statuses = all_statuses()
             for strat_id in all_ids:
+                status = statuses.get(strat_id)
+                if status and status["status"] == "skipped":
+                    continue
+                if status and status["status"] == "invalid":
+                    error_ids.append(strat_id)
+                    continue
                 review_path = f"artifacts/epic-reviews/{strat_id}-decomp-review.md"
                 if os.path.exists(review_path):
                     try:
@@ -401,6 +447,7 @@ def cmd_init(args):
         raise WorkloadError(f"{selected.id}: no planning policy configured")
 
     os.makedirs("tmp", exist_ok=True)
+    clear_all_statuses()
     for f in glob.glob("tmp/pipeline-batch-*-ids.txt"):
         os.remove(f)
     if os.path.exists(DISPATCH_MARKER):
@@ -555,8 +602,8 @@ def cmd_next_action(args):
         # --- Agent: compute next wave ---
         if phase_type == "agent":
             ids_file = config.get("ids_file", "")
-            all_ids = _read_ids(ids_file)
-            validate_ids(state, all_ids)
+            all_ids = _validate_ids_individually(
+                state, phase, ids_file, _validate_inputs_one)
             poll_phase = config.get("poll_phase", "")
 
             phases_to_check = [poll_phase] if poll_phase else []
@@ -585,7 +632,6 @@ def cmd_next_action(args):
             wave_size = max(1, max_concurrent // (1 + n_parallel))
 
             wave_ids = remaining[:wave_size]
-            validate_inputs(state, phase, wave_ids)
             wave_num = 1 + (len(all_ids) - len(remaining)) // wave_size
             total_waves = max(1, -(-len(all_ids) // wave_size))
 

@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import urllib.error
 
 import yaml
 
@@ -256,7 +257,15 @@ def _execute(selected, submission, root, credentials):
             journal["epics"][eid] = record
             _save_journal(path, journal)
             if not record["jira_key"]:
-                record["jira_key"] = jira.create_issue(*credentials, **entry["desired"], assignee_id=assignee, retry=False)
+                try:
+                    record["jira_key"] = jira.create_issue(
+                        *credentials, **entry["desired"], assignee_id=assignee,
+                        retry=False)
+                except urllib.error.HTTPError as exc:
+                    if 400 <= exc.code < 500:
+                        journal["epics"].pop(eid, None)
+                        _save_journal(path, journal)
+                    raise
                 if not re.fullmatch(rf"{selected.submission.project}-\d+", record["jira_key"]):
                     raise WorkloadError(f"{eid}: Jira returned an invalid created key")
                 created += 1

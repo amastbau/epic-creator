@@ -12,6 +12,8 @@ import yaml
 sys.path.insert(0, os.path.dirname(__file__))
 from artifact_utils import read_frontmatter
 from pipeline_workload import bound_workload, source_metadata, validate_decomposition, validate_artifact
+from pipeline_status import all_statuses
+from workload import WorkloadError
 
 
 def main():
@@ -28,6 +30,9 @@ def main():
             with open(ids_file) as f:
                 ids = [line.strip() for line in f if line.strip()]
 
+    statuses = all_statuses()
+    ids = list(dict.fromkeys(ids + sorted(set(statuses) - set(ids))))
+
     if not ids:
         print("No IDs to report on", file=sys.stderr)
         sys.exit(1)
@@ -41,31 +46,50 @@ def main():
     results = []
     for strat_id in ids:
         entry = {"strat_id": strat_id, "status": "missing"}
+        terminal = statuses.get(strat_id)
+        if terminal:
+            if terminal["status"] == "skipped":
+                entry["status"] = "skipped"
+                entry["message"] = terminal["message"]
+                results.append(entry)
+                continue
+            if terminal["status"] == "invalid":
+                entry["status"] = "invalid"
+                entry["error"] = terminal["message"]
+                entry["message"] = terminal["message"]
+                results.append(entry)
+                continue
+
         decomp = f"artifacts/epic-tasks/{strat_id}-decomposition.md"
         review = f"artifacts/epic-reviews/{strat_id}-decomp-review.md"
-        if state and Path(f"artifacts/strat-tasks/{strat_id}.md").exists():
-            entry.update(source_metadata(state, strat_id))
+        try:
+            if state and Path(f"artifacts/strat-tasks/{strat_id}.md").exists():
+                entry.update(source_metadata(state, strat_id))
 
-        if os.path.exists(decomp):
-            if state:
-                validate_decomposition(state, strat_id)
-            data, _ = read_frontmatter(decomp)
-            entry["epic_count"] = data.get("epic_count", 0)
-            entry["status"] = "decomposed"
+            if os.path.exists(decomp):
+                if state:
+                    validate_decomposition(state, strat_id)
+                data, _ = read_frontmatter(decomp)
+                entry["epic_count"] = data.get("epic_count", 0)
+                entry["status"] = "decomposed"
 
-        if os.path.exists(review):
-            if state:
-                validate_artifact(state, strat_id, review, "decomp-review")
-            data, _ = read_frontmatter(review)
-            if data.get("error"):
-                entry["status"] = "error"
-                entry["error"] = data["error"]
-            elif data.get("pass"):
-                entry["status"] = "passed"
-                entry["score"] = data.get("score")
-            else:
-                entry["status"] = "failed"
-                entry["score"] = data.get("score")
+            if os.path.exists(review):
+                if state:
+                    validate_artifact(state, strat_id, review, "decomp-review")
+                data, _ = read_frontmatter(review)
+                if data.get("error"):
+                    entry["status"] = "error"
+                    entry["error"] = data["error"]
+                elif data.get("pass"):
+                    entry["status"] = "passed"
+                    entry["score"] = data.get("score")
+                else:
+                    entry["status"] = "failed"
+                    entry["score"] = data.get("score")
+        except WorkloadError as exc:
+            entry["status"] = "invalid"
+            entry["error"] = str(exc)
+            entry["message"] = str(exc)
 
         results.append(entry)
 
