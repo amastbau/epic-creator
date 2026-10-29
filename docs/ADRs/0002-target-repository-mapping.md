@@ -57,9 +57,11 @@ Propose mapping option 4 and routing option 3.
 
 - Store one scalar **target_repository** on each implementation epic. Its value is the canonical provider, host, namespace, and repository identity from the approved inventory. Prefer a dedicated single-valued Jira field. Use a parseable description block only if the field is unavailable and the AISDLC-4 owners approve that representation.
 - Put source references in the selected workload's validated definition: the mapping-document URL and the Architecture Context repository, path, and revision. The workload configuration selects that definition. Retrieve and inject the configured source content at runtime; do not hardcode RHAI URLs in shared Epic Decomposer code. Each project may supply different sources.
-- Give the resolver verified Jira fields, the approved repository inventory, and the retrieved source content. It returns one canonical repository and evidence references. Deterministic validation checks the target against the inventory and records workload identity, source URLs and revisions or digests, Jira fields, cited sections, and inventory revision.
+- Each project's workload definition declares the owner and role of every mapping source: authoritative contribution-target data or supporting context. The project may assign either role to its mapping document or Architecture Context. Authoritative target data takes precedence over supporting repository metadata; upstream, fork, or manifest-source relationships alone do not establish a contribution target. Conflicting authoritative sources leave the result unresolved. The LLM must follow these declared roles when interpreting both sources.
+- Give the resolver verified Jira fields, the approved repository inventory, and the retrieved source content. It returns one canonical repository and evidence references. Deterministic validation checks the target against the inventory and records workload identity, source URLs and revisions or digests, Jira fields, cited sections, and inventory revision. Inventory membership validates that a repository is allowed; the cited authoritative evidence must also support its selection for this epic.
+- Bind the selected target and its evidence to a mapping snapshot containing the workload ID/version and definition digest, Jira inputs, source roles and revisions/content digests, and approved-inventory revision. Carry that binding through decomposition, review, resume, and submission. Before resuming or submitting, verify the bound inputs are unchanged. A change invalidates the prior repository selection and its review; refresh the snapshot, resolve the target, and review the updated plan before submission.
 - Each harness queries for the exact **target_repository** value. Project scope may narrow the query but cannot replace or override the target.
-- If a source is unavailable or stale, evidence conflicts, or the resolver cannot support one target, leave the target unresolved and block publication or dispatch. Do not choose a default or the first candidate.
+- Return an explicit resolved or unresolved result. A resolved result contains exactly one target and its supporting evidence. An unresolved result contains a reason, candidate approved repositories, and available evidence references; the candidate list may be empty when evidence is unavailable. Preserve unresolved results in the planning report for refinement. If a source is unavailable or stale, evidence conflicts, or the resolver cannot support one target, return unresolved and block publication or dispatch. Do not choose a default or the first candidate.
 - Decompose work spanning repositories into repository-specific implementation epics. Multi-repository execution requires a separate change to the AISDLC-4 producer/consumer contract.
 - Keep credentials out of workload definitions. Source retrieval must use the configured authorized access mechanism.
 
@@ -69,7 +71,13 @@ Propose mapping option 4 and routing option 3.
 - Projects can configure different mapping documents and Architecture Context locations without changing shared resolver code.
 - Missing or ambiguous mapping evidence blocks generation and requires correction or human review.
 - The Fullsend consumer must change to read and validate the per-epic target; its current workflow-wide target is insufficient.
-- Implementation depends on agreement about the Jira field ID and type, target serialization, workload source-reference schema, approved-inventory ownership, mapping-source ownership and access, and the resolver's evidence and abstention format.
+- Implementation depends on agreement about the Jira field ID and type, target serialization, workload source-reference schema, named inventory and source owners, source access, and encoding of the resolved/unresolved results and their evidence.
+
+## Validation
+
+Before accepting this proposal, evaluate the resolver against representative RHAI cases and at least one real non-RHAI project's configured sources, with expected targets verified by the relevant project owners. Include correct single-target mappings, one-to-many and many-to-many component relationships, cross-repository decomposition, ambiguous or conflicting evidence, unavailable sources, and changes to bound inputs.
+
+Check target correctness separately from inventory membership: selecting the wrong approved repository fails the evaluation. Cases without sufficient evidence must return unresolved with the expected reason, candidates, and available evidence. The agreed acceptance cases must produce the verified targets or expected unresolved outcomes before the design is accepted. These evaluations are required work; this ADR does not claim they have passed.
 
 ## References
 
