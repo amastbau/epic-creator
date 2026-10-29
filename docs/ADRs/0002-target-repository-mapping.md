@@ -1,5 +1,5 @@
 ---
-title: "2. Single-repository targets for implementation epics"
+title: 'Assign one target repository to each implementation epic'
 status: Proposed
 topics:
   - workloads
@@ -9,88 +9,76 @@ topics:
   - provenance
 ---
 
-# 2. Single-repository targets for implementation epics
+# ADR-0002: Assign one target repository to each implementation epic
 
 Date: 2026-10-22
-Updated: 2026-10-29 — clarify the single-target Jira contract and add the October 26 mapping and harness-routing proposals.
+Updated: 2026-10-29
 
 ## Status
 
-Proposed — awaiting review with Bill and the Jira/project owners. The options and open questions below are not settled decisions.
+Proposed. Confirm the Jira field and workload contract with the Jira and Fullsend owners before implementation.
 
 ## Context
 
-AISDLC-90 defines how Epic Creator assigns implementation epics to repositories so that Fullsend can run code generation in the correct repository. AISDLC-4 requires each implementation epic to identify exactly one canonical target repository from an approved inventory; each eligible epic produces one code-agent invocation and one pull request. AISDLC-4 permits a dedicated Jira field or another explicitly defined, parseable description value. It does not require a list-valued target. The earlier implementation plan's list representation is a proposal and must be reconciled with this contract before implementation.
+AISDLC-90 needs Epic Creator to identify the repository where code generation should run. The AISDLC-4 contract requires each implementation epic to resolve to one canonical repository from an approved inventory, with one code-agent invocation and one pull request.
 
-AISDLC-61 establishes the extension pattern for Epic Decomposer: workload-specific behavior is defined behind a validated workload contract, and Fullsend configuration selects the workload and its definition. Repository mapping sources should use the same pattern. Each project/workload must be able to provide its own mapping-document URL and Architecture Context repository, path, and revision; shared Epic Decomposer code must not hardcode RHAI source URLs.
+The current Fullsend poller accepts a workflow-wide repository and does not read a per-epic target. Epic Creator and Fullsend therefore need to agree on the target field, its serialization, and the harness query.
 
-The October 26, 2026 meeting notes describe the one-repository restriction as enforced and attribute the proposal to Eder, to simplify merge workflows. Amos proposed using an LLM with repository descriptions to help identify the target. The discussion also considered a static mapping table and Architecture Context documentation. The notes make an ADR and coordination with Bill the next steps; they do not record an approved mapping method.
+Repository mapping needs project-specific evidence. A component catalog or Architecture Context entry can describe repositories and their relationships without establishing which repository is the approved target for a Jira epic. The RHAI mapping document is a candidate source; verify its contents and ownership before treating it as authoritative.
 
-In the follow-up Slack discussion, bkorren proposed that each harness define an entity source query against Jira. The routing alternatives were separate Jira projects per repository, with each harness querying its project, or a shared project with a Jira field such as Component populated upstream and harness queries scoped to the matching values. bkorren also pointed to ADR 98 and related open ADRs as relevant context that does not fully settle the entity-source query. The linked RHAISTRAT-2376 example spans several components and delivery areas. It illustrates why a broad feature may need repository-specific implementation epics; it does not change the one-repository contract for each implementation epic.
-
-The Fullsend poller currently receives a workflow-wide target repository and does not read a per-epic repository field. Fullsend's Jira guide describes repository-specific polling with JQL. Epic Creator and Fullsend therefore need to agree on a machine-readable value and matching harness query before the contract can be implemented.
-
-The inspected RHOAI Architecture Context entry for RHODS Operator records that component's repository and branch and lists repositories used for managed-component manifests. That is component and manifest-source metadata; it does not map Jira components or implementation epics to code-generation targets. The separate [RHAI component-to-repository mapping notes](https://docs.google.com/document/d/1Hv34Ci58_BIhWmWJXKE34w2ZlQrQWMeg_fjvMsv4Erk/edit?tab=t.0#heading=h.wdwmerquvvbx) are the direct candidate source, but their contents have not been verified because Google API access was denied in this work session.
-
-A Jira component, repository description, or Architecture Context entry can help classify work, but none alone necessarily identifies the authorized code-generation target. In particular, an upstream/downstream repository relationship is not proof that either repository is the intended contribution target.
+AISDLC-61 provides the workload extension model: a selected workload has a validated definition that configures workload-specific behavior. Repository mapping sources need the same flexibility so each project can provide its own mapping document and Architecture Context location.
 
 ## Decision drivers
 
-- Enforce one canonical repository, one code-agent invocation, and one pull request per implementation epic.
-- Make repository assignment auditable and validate it against an approved inventory.
-- Let each harness query only the implementation epics assigned to its repository.
-- Preserve component and architecture evidence without treating it as an implicit repository target.
-- Stop visibly on missing, ambiguous, conflicting, malformed, stale, or unapproved mappings.
+- Resolve each implementation epic to exactly one approved repository.
+- Make the assignment traceable to Jira fields and versioned mapping evidence.
+- Allow each workload to supply its own mapping and architecture sources.
+- Keep harness queries consistent with the target assigned by Epic Creator.
+- Stop dispatch when evidence is missing, conflicting, stale, or ambiguous.
 
-## Options
+## Options considered
 
-### Mapping source and resolution
+### Mapping
 
-1. **Have an LLM choose a repository directly from repository descriptions.** This can interpret broad feature language, but direct model selection is variable and difficult to make an auditable authority. It can also confuse related repositories, forks, or upstream/downstream lineage.
-2. **Map Jira Components to repositories with a static table.** This is deterministic and reviewable when component relationships are verified. It requires an owner and change process, and components may describe teams or architecture areas rather than a one-to-one repository boundary.
-3. **Use Architecture Context as the sole mapping source.** The inspected RHODS Operator page records its repository and branch and lists managed-component manifest sources. This describes component and deployment metadata; it does not define a Jira-to-code-generation-target rule. Other Architecture Context entries may provide useful evidence, but their mapping authority and completeness would need verification.
-4. **Use a grounded LLM with per-workload injected sources.** Each workload supplies its mapping-document URL and Architecture Context repository/path/revision through its validated definition. Give the model the epic's verified Jira fields, the approved repository inventory, and the retrieved content from both sources. The model selects one repository and cites the source evidence it used; deterministic validation checks that the result is exactly one canonical identity from the approved inventory. This lets each project use its own mapping and architecture data, while depending on accurate, accessible, versioned sources and explicit abstention behavior.
+1. **LLM using repository descriptions:** flexible, but descriptions alone may not distinguish related repositories or establish an authoritative target.
+2. **Static Jira-component-to-repository table:** deterministic and reviewable, but requires verified one-to-one mappings and an owner for updates.
+3. **Architecture Context as the sole source:** useful for architecture and repository metadata, but the inspected RHODS Operator entry does not define a Jira-to-target rule.
+4. **Grounded LLM with workload-provided sources:** combines Jira fields, the approved repository inventory, a mapping document, and relevant Architecture Context. It can interpret the evidence, but requires source validation, provenance, and abstention behavior.
 
 ### Jira and harness routing
 
-1. **Use a distinct Jira project per repository.** Each harness can query its project's issues. This keeps queries simple if project boundaries already match repository boundaries, but it makes project placement an upstream routing decision and may not fit projects organized by product or team.
-2. **Use one shared project and a target field or Component filter.** Epic Creator writes the target upstream and each harness queries its assigned value. A dedicated single-valued target field makes the repository explicit; using Component directly requires proving that the relevant values map unambiguously to repositories.
-3. **Use project scope as a coarse filter and an explicit target field as the dispatch authority.** Harnesses may keep project-specific JQL where useful, while every implementation epic still carries one exact target value. This supports existing project boundaries without making project placement or a multi-valued component the only repository contract.
+1. **Separate Jira project per repository:** simple harness queries where project boundaries already match repository boundaries.
+2. **Shared project with a target field or Component filter:** supports shared projects; a dedicated single-valued target field is clearer than relying on Component.
+3. **Project scope plus an explicit target field:** project-specific queries can narrow the results while the target field remains the dispatch authority.
 
 ## Decision
 
-Propose option 4 for mapping and option 3 for Jira routing, subject to confirmation with Bill and the Jira/project owners.
+Propose mapping option 4 and routing option 3.
 
-- Each implementation epic has one scalar `target_repository` value: a canonical provider, host, namespace, and repository identity from the approved inventory. It is not a multi-repository list. The preferred Jira representation is a dedicated single-valued target field. A stable parseable description block is a fallback only if the field is unavailable and AISDLC-4 owners approve the encoding.
-- Following AISDLC-61, put repository-mapping inputs in the selected workload's validated definition. The definition supplies the mapping-document URL and Architecture Context repository/path/revision; Fullsend's `.fullsend/config.yaml` selects the workload and definition. Inject the retrieved source content into the resolver at runtime. Each project may provide different sources, and shared Epic Decomposer logic must not hardcode RHAI URLs.
-- For RHAI, once the mapping notes' contents and ownership are verified, use them together with relevant Architecture Context entries and verified Jira epic fields. The inspected RHODS Operator entry alone is not a Jira-to-target mapping. The LLM may use both sources to select a repository directly, but it must choose from the approved inventory and return the canonical identity plus precise source references.
-- Deterministically validate the selected workload's source URLs and pinned revisions/digests and record their provenance. Never put credentials in workload definitions; source retrieval uses the configured authorized access mechanism.
-- Deterministic validation accepts only one canonical, approved target. If a configured source is missing, unavailable, or stale, the sources conflict, the epic evidence is ambiguous, or the model cannot cite support, leave the target unresolved and block publication or dispatch. Do not substitute a default or first candidate.
-- The explicit `target_repository` value is the harness dispatch selector. Each harness entity source must query for its exact canonical value. A project-specific query may narrow the candidate set, but project placement cannot override a missing, malformed, or conflicting target value. Component may be used as a selector only if its mapping is verified and unambiguous; it is not the target identity by itself.
-- Missing or invalid targets, conflicting Jira signals, stale mapping evidence, and multiple repository candidates remain unresolved and block publication or dispatch. They require correction or human review; no fallback selects the first candidate.
-- A feature that requires implementation in multiple repositories is decomposed into repository-specific implementation epics. Link them, and add dependency edges only for actual prerequisites. Multi-repository execution requires a later change to AISDLC-4 and the Fullsend consumer contract.
-- The Fullsend consumer must read and validate the per-epic target before dispatch. Its current workflow-wide target behavior is not sufficient to implement this contract; the field, serialization, JQL, and consumer change must be agreed with Bill before implementation.
+- Store one scalar **target_repository** on each implementation epic. Its value is the canonical provider, host, namespace, and repository identity from the approved inventory. Prefer a dedicated single-valued Jira field. Use a parseable description block only if the field is unavailable and the AISDLC-4 owners approve that representation.
+- Put source references in the selected workload's validated definition: the mapping-document URL and the Architecture Context repository, path, and revision. The workload configuration selects that definition. Retrieve and inject the configured source content at runtime; do not hardcode RHAI URLs in shared Epic Decomposer code. Each project may supply different sources.
+- Give the resolver verified Jira fields, the approved repository inventory, and the retrieved source content. It returns one canonical repository and evidence references. Deterministic validation checks the target against the inventory and records workload identity, source URLs and revisions or digests, Jira fields, cited sections, and inventory revision.
+- Each harness queries for the exact **target_repository** value. Project scope may narrow the query but cannot replace or override the target.
+- If a source is unavailable or stale, evidence conflicts, or the resolver cannot support one target, leave the target unresolved and block publication or dispatch. Do not choose a default or the first candidate.
+- Decompose work spanning repositories into repository-specific implementation epics. Multi-repository execution requires a separate change to the AISDLC-4 producer/consumer contract.
+- Keep credentials out of workload definitions. Source retrieval must use the configured authorized access mechanism.
 
 ## Consequences
 
-- The Jira contract and the meeting's single-repository constraint are explicit. The list-valued representation in the implementation plan and any typed artifact proposal must be revised or explicitly reconciled with this scalar decision before implementation.
-- Every dispatched implementation epic has one approved target and produces one pull request in that repository. Broad feature scope such as RHAISTRAT-2376 is split into repository-specific implementation epics where it crosses repository boundaries, with links only for real dependencies.
-- Mapping evidence should record workload ID/version, source URLs and revisions/digests, the Jira fields used, cited source sections, approved-inventory revision, and selected canonical repository. Changes to those inputs invalidate stale planning evidence.
-- Jira project boundaries can help scope queries, but the explicit target field remains the producer/consumer contract. Per-repository Jira projects are viable where they already match the repository inventory; they do not remove the need to validate target identity.
-- The dedicated Jira field's ID and type, exact serialization, per-workload source-reference schema, mapping-notes owner/update process and access, verified RHAI examples, model abstention/evidence format, and a named non-RHAI pilot remain open. Do not start resolver implementation until these are agreed.
-- Any Fullsend consumer change belongs in the Fullsend-owned change and must be reviewed against AISDLC-4. This ADR does not authorize or implement that consumer change.
+- Repository assignment has an explicit producer/consumer contract and can be audited against the inputs used to make it.
+- Projects can configure different mapping documents and Architecture Context locations without changing shared resolver code.
+- Missing or ambiguous mapping evidence blocks generation and requires correction or human review.
+- The Fullsend consumer must change to read and validate the per-epic target; its current workflow-wide target is insufficient.
+- Implementation depends on agreement about the Jira field ID and type, target serialization, workload source-reference schema, approved-inventory ownership, mapping-source ownership and access, and the resolver's evidence and abstention format.
 
 ## References
 
 - [AISDLC-90 — Tag implementation epics with target repositories](https://redhat.atlassian.net/browse/AISDLC-90)
 - [AISDLC-61 — Make Epic Decomposer support pluggable planning workloads](https://redhat.atlassian.net/browse/AISDLC-61)
 - [AISDLC-4 — Deploy Fullsend code generation for Red Hat AI engineering](https://redhat.atlassian.net/browse/AISDLC-4)
-- [RHAISTRAT-2376 — AWS Neuron Support for Red Hat AI](https://redhat.atlassian.net/browse/RHAISTRAT-2376), a multi-component feature example
+- [RHAISTRAT-2376 — AWS Neuron Support for Red Hat AI](https://redhat.atlassian.net/browse/RHAISTRAT-2376)
 - [Architecture Context repository](https://github.com/opendatahub-io/architecture-context/)
-- [RHOAI 2.10 RHODS Operator architecture entry](https://github.com/opendatahub-io/architecture-context/blob/main/architecture/rhoai-2.10/rhods-operator.md) — component repository and manifest-source metadata, not an epic-target mapping
-- [RHAI component-to-repository mapping notes](https://docs.google.com/document/d/1Hv34Ci58_BIhWmWJXKE34w2ZlQrQWMeg_fjvMsv4Erk/edit?tab=t.0#heading=h.wdwmerquvvbx) — direct candidate source; access/content not verified
+- [RHODS Operator architecture entry](https://github.com/opendatahub-io/architecture-context/blob/main/architecture/rhoai-2.10/rhods-operator.md)
+- [RHAI component-to-repository mapping notes](https://docs.google.com/document/d/1Hv34Ci58_BIhWmWJXKE34w2ZlQrQWMeg_fjvMsv4Erk/edit?tab=t.0#heading=h.wdwmerquvvbx) — candidate source; verify contents and ownership
 - [Fullsend poller at the inspected revision](https://github.com/fullsend-ai/fullsend/blob/15136ebc5b31720b80a8a45220c58b0dfda9d6ec/internal/cli/poll.go)
 - [Fullsend Jira integration guide at the inspected revision](https://github.com/fullsend-ai/fullsend/blob/15136ebc5b31720b80a8a45220c58b0dfda9d6ec/docs/guides/user/jira-integration.md)
-- Amos Mastbaum and Eder Ignatowicz, meeting notes, 2026-10-26 (supplied in the AISDLC-90 task context)
-- bkorren, follow-up Slack discussion on AISDLC-90 (supplied in the task context)
-- [Fullsend PR #8616](https://github.com/fullsend-ai/fullsend/pull/8616) — reference for the repository's ADR format; its decision is separate from this proposal.
