@@ -21,6 +21,19 @@ def _path(value):
     return str(path)
 
 
+def guidance_reference(policy):
+    reference = policy.get("guidance")
+    if reference is None:
+        return None
+    if (not isinstance(reference, dict) or set(reference) != {"source_id", "path"}
+            or reference["source_id"] not in {source["id"] for source in policy["sources"]}):
+        raise WorkloadError("Invalid repository guidance source reference")
+    path = _path(reference["path"])
+    if Path(path).suffix.lower() not in (".md", ".markdown"):
+        raise WorkloadError("Repository guidance must reference a Markdown file")
+    return {"source_id": reference["source_id"], "path": path}
+
+
 def normalize_git_source(reference: dict) -> dict:
     data = dict(reference)
     if not re.fullmatch(r"[a-z][a-z0-9-]*", str(data.get("id", ""))):

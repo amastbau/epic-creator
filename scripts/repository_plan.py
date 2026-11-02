@@ -43,7 +43,7 @@ def _acyclic(graph):
         return False
 
 
-def _evidence(resolution, sources):
+def _evidence(resolution, sources, guidance):
     authoritative = False
     for citation in resolution.get("evidence_refs", []):
         source = sources.get(citation["source_id"])
@@ -52,7 +52,8 @@ def _evidence(resolution, sources):
         text = Path(source["files"][citation["path"]]["local_path"]).read_text()
         if not _quote(citation["quote"], text):
             raise WorkloadError("Repository evidence quote does not exist in bound source")
-        authoritative |= source["role"] == "authoritative"
+        is_guidance = guidance and (citation["source_id"], citation["path"]) == (guidance["source_id"], guidance["path"])
+        authoritative |= source["role"] == "authoritative" and not is_guidance
     return authoritative
 
 
@@ -132,7 +133,7 @@ def finalize_repository_plan(context: dict, proposal: dict) -> dict:
             reason = resolution.get("reason", "repository_unresolved")
         elif key not in inventory:
             reason = "unknown_repository"
-        elif not _evidence(resolution, sources):
+        elif not _evidence(resolution, sources, context.get("guidance")):
             reason = "missing_authoritative_evidence"
         if reason:
             candidates = resolution.get("candidates", [])

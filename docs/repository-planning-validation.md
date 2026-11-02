@@ -2,13 +2,13 @@
 
 Implementation branch: `jira/AISDLC-547-repository-oriented-epics`.
 Base: PR #40 head `424bffd790afa96a91244654a59f4c3d11800307`.
-Implementation commit: `bba8726d82e8edd3e3cf6f0c005c4f46aa339abd`.
+Initial implementation commit: `bba8726d82e8edd3e3cf6f0c005c4f46aa339abd`.
 
 ## Deterministic checks
 
-Local full suites on Python 3.11.15 and 3.12.13 each passed **678 tests**, with
-four opt-in model tests skipped. Both include the unchanged legacy workload
-path. Additional report/evaluator checks passed 38 tests, with three model tests
+Local full suites on Python 3.11.15 and 3.12.13 each passed **693 tests**, with
+five opt-in model tests skipped. Both include the unchanged legacy workload
+path. Earlier additional report/evaluator checks passed 38 tests, with three model tests
 skipped. `git diff --check` and the existing evaluation PII scanner passed.
 
 The tests exercise Git document links, commit/content binding, changed refs,
@@ -61,6 +61,32 @@ independent review phase. The regression first failed and then passed; 71
 artifact/pipeline checks passed after the protection was added. One additional
 adapter attempt exposed incompatible Python escaping in the CLI's Unicode JSON
 Schema regex; the corrected path schema was accepted on the subsequent run.
+
+## Optional document interpretation guidance
+
+`repository_policy.guidance` can select a Git-hosted Markdown prompt by source ID
+and path. The planner and reviewer receive its text in the bound context.
+Configured source roles, approved targets and shared repository rules still apply;
+guidance cannot establish repository ownership by itself. Publication evidence
+identifies the guidance source, path and content hash.
+
+New regressions first reproduced missing context content, accepted inline
+tampering, ignored missing/empty/unreadable guidance, guidance-only ownership
+citations, rejected valid configuration and missing publication provenance.
+These now pass. Additional checks cover unsafe/unknown references, configuration
+digest binding and changed guidance blocking publication after review.
+The focused repository context/plan checks passed 39 tests, and the guidance,
+submission, pipeline and artifact checks passed 58 tests before the full suites.
+
+A fresh tool-free model planning check used an alternate workload and mapping
+rows with two otherwise unexplained repository columns. The selected guidance
+identified `lane-2` as the contribution column and `lane-1` as the downstream
+runtime column. The planner resolved manager/cloudmanager work to one operator
+scope, preserved both requirements and ACs, and cited the actual mapping rows.
+The CLI finalizer accepted it; no epics or Jira writes were made in this planning
+check. This is a focused guidance check, not a repeat of the earlier full model
+loops. Raw response, input/context, pinned sources and staged code hashes are
+retained under the ignored run directory's `guidance-model/` subdirectory.
 
 ## Activation boundary
 

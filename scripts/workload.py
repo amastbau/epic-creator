@@ -100,12 +100,13 @@ def _load_planning(data):
     root = WORKLOADS_DIR.parent.resolve()
     repository_policy = data.get("repository_policy")
     if repository_policy:
-        from repository_sources import normalize_git_source, _path
+        from repository_sources import guidance_reference, normalize_git_source, _path
         sources = [normalize_git_source(item) for item in repository_policy["sources"]]
         ids = [item["id"] for item in sources]
         if len(ids) != len(set(ids)) or repository_policy["inventory"]["source_id"] not in ids:
             raise WorkloadError("Duplicate or missing repository inventory source")
         _path(repository_policy["inventory"]["path"])
+        guidance_reference(repository_policy)
     paths, contents = {}, {}
     for stage in ("decompose", "review", "revise", "scoring", "artifact_template"):
         reference = Path(data[stage])

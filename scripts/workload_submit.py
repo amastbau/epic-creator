@@ -115,6 +115,9 @@ def preflight(selected, key, root):
                              "files": {name: {"sha256": file["sha256"]} for name, file in source["files"].items()}}
                             for source in repository_context["sources"]],
                 "inventory_entry": repository_context["inventory"].get(target["inventory_key"]) if target else None}
+            if repository_context.get("guidance"):
+                entry["repository_evidence"]["guidance"] = {
+                    key: repository_context["guidance"][key] for key in ("source_id", "path", "sha256")}
         identity = "epic-creator-id-" + _digest([selected.id, key, entry["epic_id"]])
         desired = dict(project=selected.submission.project, issue_type=selected.submission.issue_type,
             summary=entry["title"], description_adf=jira.markdown_to_adf(description),

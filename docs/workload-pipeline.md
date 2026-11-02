@@ -109,11 +109,12 @@ planning:
   repository_policy:
     mode: one-implementation-epic-per-repository
     inventory: {source_id: mapping, path: inventory.yaml}
+    guidance: {source_id: mapping, path: repository-planning.md} # Optional
     sources:
       - id: mapping
         url: https://github.com/example/repository-ownership
         ref: main
-        paths: [inventory.yaml, mapping.md]
+        paths: [inventory.yaml, mapping.md, repository-planning.md]
         role: authoritative
         owner: example-maintainers
         max_age_seconds: 86400
@@ -131,6 +132,27 @@ repository; credentials come from the existing Git credential helper and must
 never be embedded in URLs. Local `file://` Git sources support isolated tests.
 Supported content is Markdown, YAML, JSON and text. This feature does not import
 Google Docs or invent their Git location.
+
+Optional `guidance` selects a UTF-8 Markdown prompt from one of these sources.
+Its `source_id` must match a configured source and its repository-relative `path`
+must be included in that source's selected files. It can also live in a separate
+configured Git repository. For example, `repository-planning.md` might contain:
+
+```markdown
+Read mapping.md's Contribution repository column for ownership; its Product
+repository column lists downstream distributions. Use architecture documents to
+identify component boundaries and mapping.md to resolve contribution targets.
+If these sources disagree about ownership, leave the target unresolved.
+```
+
+The planner and reviewer use this prompt to interpret the supplied documents.
+It cannot override shared workflow rules, declared source roles, approved targets,
+strategy requirements or repository boundaries, and cannot establish ownership
+by itself. All other retrieved documents remain evidence rather than instructions.
+The context includes the guidance text and hash, bound to its Git commit and the
+planning snapshot. Missing, empty or unreadable guidance blocks drafting. Changing
+it invalidates the existing snapshot and review. Publication evidence records its
+source, path and hash. Omitting `guidance` preserves the existing behavior.
 
 The inventory follows `_schema/repository-inventory.schema.json`:
 

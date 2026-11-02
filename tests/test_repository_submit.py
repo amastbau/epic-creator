@@ -17,8 +17,16 @@ from test_workload_submit import Jira
 
 
 @pytest.fixture
-def publication(monkeypatch, tmp_path, capsys):
+def publication(monkeypatch, tmp_path, capsys, request):
     selected, source = setup_pipeline(monkeypatch, tmp_path, capsys)
+    if getattr(request, "param", False):
+        policy = selected.planning.repository_policy
+        repo = Path(policy["sources"][0]["url"].removeprefix("file://"))
+        (repo / "planning.md").write_text("Read mapping.md for ownership; architecture.json explains component boundaries.\n")
+        git(repo, "add", ".")
+        git(repo, "commit", "--signoff", "-m", "Add planning guidance")
+        policy["sources"][0]["paths"].append("planning.md")
+        policy["guidance"] = {"source_id": "mapping", "path": "planning.md"}
     artifacts.update_frontmatter(source, {"attachment_id": "9001", "attachment_created": "2026-11-02T09:00:00Z"}, "strat-task")
     root = Path("artifacts")
     context = repository_context.load_repository_context(selected, source, root)
@@ -145,6 +153,26 @@ def test_evidence_export_contains_pinned_sources_without_cache_paths(publication
     assert evidence["sources"][0]["commit"] == context["sources"][0]["commit"]
     assert "local_path" not in json.dumps(evidence)
     assert "cache_root" not in json.dumps(evidence)
+
+
+@pytest.mark.parametrize("publication", [True], indirect=True)
+def test_evidence_export_identifies_bound_guidance(publication):
+    selected, source, context, _, _ = publication
+    evidence = workload_submit.preflight(selected, source.stem, Path("artifacts"))["plan"][0]["repository_evidence"]
+    assert evidence.get("guidance") == {"source_id": "mapping", "path": "planning.md",
+                                       "sha256": context["sources"][0]["files"]["planning.md"]["sha256"]}
+    assert "local_path" not in json.dumps(evidence)
+
+
+@pytest.mark.parametrize("publication", [True], indirect=True)
+def test_guidance_change_after_review_prevents_publication(publication, monkeypatch):
+    _, source, context, _, jira = publication
+    repo = Path(context["policy"]["sources"][0]["url"].removeprefix("file://"))
+    (repo / "planning.md").write_text("New interpretation instructions require replanning.\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "--signoff", "-m", "Update planning guidance")
+    assert run(monkeypatch, source) == 1
+    assert jira.writes == []
 
 
 def test_html_report_shows_repository_target(publication):

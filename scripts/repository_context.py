@@ -9,7 +9,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 import yaml
 
-from repository_sources import fetch_git_sources, normalize_git_source
+from repository_sources import fetch_git_sources, guidance_reference, normalize_git_source
 from workload import WorkloadError
 
 SCHEMA_DIR = Path(__file__).resolve().parents[1] / "workloads/_schema"
@@ -51,8 +51,24 @@ def source_binding(manifests):
 def _binding(context):
     fields = ("schema_version", "source_key", "workload_id", "workload_version",
               "workload_digest", "planning_digest", "strategy_sha256", "policy")
-    return {**{key: context[key] for key in fields},
-            "sources": source_binding(context["sources"]), "inventory": context["inventory_document"]}
+    binding = {**{key: context[key] for key in fields},
+               "sources": source_binding(context["sources"]), "inventory": context["inventory_document"]}
+    if "guidance" in context:
+        binding["guidance"] = context["guidance"]
+    return binding
+
+
+def _load_guidance(policy, sources):
+    reference = guidance_reference(policy)
+    if reference is None:
+        return None
+    source = next(source for source in sources if source["id"] == reference["source_id"])
+    file = source["files"][reference["path"]]
+    content = Path(file["local_path"]).read_bytes()
+    text = content.decode("utf-8")
+    if not text.strip():
+        raise WorkloadError("Repository guidance is empty")
+    return {**reference, "sha256": hashlib.sha256(content).hexdigest(), "content": text}
 
 
 def validate_context_snapshot(context):
@@ -67,6 +83,12 @@ def validate_context_snapshot(context):
         for file in source["files"].values():
             if hashlib.sha256(Path(file["local_path"]).read_bytes()).hexdigest() != file["sha256"]:
                 raise WorkloadError("Repository evidence content changed")
+    try:
+        guidance = _load_guidance(context["policy"], context["sources"])
+    except (WorkloadError, OSError, KeyError, StopIteration, UnicodeError):
+        raise WorkloadError("Repository guidance content changed or became unavailable") from None
+    if guidance != context.get("guidance"):
+        raise WorkloadError("Repository guidance content changed")
 
 
 def load_repository_context(selected, source_path: Path, artifacts_dir: Path) -> dict:
@@ -88,12 +110,15 @@ def load_repository_context(selected, source_path: Path, artifacts_dir: Path) ->
         inventory_path = source["files"][inventory_ref["path"]]["local_path"]
         inventory_data = yaml.safe_load(Path(inventory_path).read_text())
         inventory = validate_inventory(inventory_data)
-    except (WorkloadError, OSError, KeyError, StopIteration, yaml.YAMLError) as exc:
+        guidance = _load_guidance(policy, sources)
+    except (WorkloadError, OSError, KeyError, StopIteration, UnicodeError, yaml.YAMLError):
         return {**context, "status": "blocked", "reason": "source_unavailable",
                 "inventory": {}, "sources": [], "digest": digest({**context, "cache_root": None})}
     result = {**context, "status": "ready", "sources": sources, "inventory": inventory,
               "strategy_path": str(Path(source_path).resolve()), "inventory_document": inventory_data,
               "inventory_revision": inventory_data["revision"]}
+    if guidance is not None:
+        result["guidance"] = guidance
     result["digest"] = digest(_binding(result))
     return result
 
