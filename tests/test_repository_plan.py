@@ -63,6 +63,26 @@ def test_invalid_work_cannot_hide_coverage_or_evidence_gaps(inputs, change):
         module("repository_plan").finalize_repository_plan(context, draft)
 
 
+def test_acceptance_checks_can_also_trace_assigned_requirements(inputs):
+    context, draft = inputs
+    draft["work_items"][0]["acceptance_criteria"].append(
+        {"source_ref": "HLR-1", "text": "Manager emits logs in the operator repository."})
+    assert module("repository_plan").finalize_repository_plan(context, draft)["ready_for_drafting"]
+
+
+def test_independent_conditional_gates_cannot_duplicate_one_repository(inputs):
+    context, draft = inputs
+    for number, item in enumerate(list(draft["work_items"]), 1):
+        gate = deepcopy(item)
+        gate.update(id=f"I{number}", kind="investigation", description=f"Investigate outcome {number}")
+        gate.pop("resolution")
+        draft["work_items"].append(gate)
+        item.update(branch="A", gated_by=gate["id"], depends_on=[gate["id"]])
+    plan = module("repository_plan").finalize_repository_plan(context, draft)
+    assert plan["ready_for_drafting"] is False
+    assert any(item["reason"] == "conditional_repository_collision" for item in plan["unresolved"])
+
+
 @pytest.mark.parametrize("resolution", [
     {"status": "unresolved", "reason": "publication_destination_unknown", "candidates": []},
     {"status": "resolved", "target_key": "unknown", "evidence_refs": []},

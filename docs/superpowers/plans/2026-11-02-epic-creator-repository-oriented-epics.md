@@ -204,10 +204,13 @@ the existing anonymization/staging conventions.
 
 ## Delivery boundaries and current status
 
-This is a saved implementation plan. No Epic Creator code, Jira fields,
-presentation, PR, pipeline or deployment was changed while preparing it. No new
-model evaluation was launched. Source/inventory approval and verified real-case
-expectations remain pending, so production readiness is not claimed.
+Implementation now runs on `jira/AISDLC-547-repository-oriented-epics`, based on
+PR #40 head `424bffd790afa96a91244654a59f4c3d11800307`, following the user's later
+explicit instruction to branch from that PR. Tasks 1–5 are implemented; Task 6
+adds the evaluator, isolated Jira integration, model harness and documentation.
+No production workload is activated by this change. Source/inventory approval
+and verified real-case expectations remain pending, so production readiness is
+not claimed. The implementation does not alter live Jira or deploy Fullsend.
 
 The implementation is AISDLC-547. AISDLC-548 and AISDLC-4 consume the producer
 contract and deploy execution separately; their code is not bundled here.

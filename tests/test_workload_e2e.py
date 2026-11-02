@@ -57,6 +57,7 @@ class LocalJira:
         self.links = set()
         self.drop_after = None
         self.next_key = 1
+        self.components = ["Dashboard"]
 
     @property
     def writes(self):
@@ -73,7 +74,7 @@ class LocalJira:
         if method == "GET" and path.startswith("/attachment/"):
             return self.contents[path.rsplit("/", 1)[-1]].encode()
         if method == "GET" and path.startswith("/project/"):
-            return [{"name": "Dashboard"}]
+            return [{"name": name} for name in self.components]
         if path == "/search/jql":
             query = body or {k: v[0] for k, v in parse_qs(parsed.query).items()}
             marker = re.search(r'labels = "([^"]+)"', query["jql"])
@@ -493,7 +494,7 @@ def model_worker(workspace, phase, agent):
     template = Path(variables["ARTIFACT_TEMPLATE"]).read_text()
     inputs = {str(p.relative_to(workspace.path)): p.read_text()
               for directory in [workspace.path / "artifacts", workspace.path / ".context"]
-              for p in sorted(directory.rglob("*")) if p.is_file() and p.suffix in (".md", ".txt")}
+              for p in sorted(directory.rglob("*")) if p.is_file() and p.suffix in (".md", ".txt", ".json", ".yaml", ".yml")}
     schemas = {name: workspace.cli("frontmatter", "schema", name, "--workload", workspace.workload_id).stdout
                for name in ("epic-task", "decomp-summary", "decomp-review")}
     prompt = (
@@ -529,6 +530,10 @@ def model_worker(workspace, phase, agent):
     directory.mkdir(exist_ok=True)
     (directory / f"{phase}.json").write_text(result.stdout)
     (directory / f"{phase}.stderr").write_text(result.stderr)
+    (directory / f"{phase}-inputs.json").write_text(json.dumps({
+        "prompt_sha256": __import__("hashlib").sha256(prompt.encode()).hexdigest(),
+        "runtime_seconds": time.monotonic()-started,
+        "inputs": {name: __import__("hashlib").sha256(value.encode()).hexdigest() for name, value in inputs.items()}}, indent=2))
     print(f"Model phase {phase}: exit {result.returncode} after {time.monotonic()-started:.1f}s", flush=True)
     assert result.returncode == 0, result.stderr + result.stdout
     response = json.loads(result.stdout)

@@ -105,7 +105,7 @@ def finalize_repository_plan(context: dict, proposal: dict) -> dict:
         coverage.update(refs)
         ac_refs = {ac["source_ref"] for ac in item["acceptance_criteria"]}
         if (not set(item["acceptance_refs"]) <= ac_refs
-                or not ac_refs <= set(item["acceptance_refs"])):
+                or not ac_refs <= set(refs)):
             raise WorkloadError("Work item acceptance criteria do not cover assigned source ACs")
         if any(dep not in items or dep == item["id"] for dep in item["depends_on"]):
             raise WorkloadError("Unknown or self-referencing work dependency")
@@ -191,6 +191,10 @@ def finalize_repository_plan(context: dict, proposal: dict) -> dict:
         scopes.append(scope)
     for scenario in _scenarios(scopes):
         ids = {scope["scope_id"] for scope in scenario}
+        targets = [tuple(scope["target_repository"][name] for name in TARGET_FIELDS)
+                   for scope in scenario if scope["kind"] == "implementation"]
+        if len(targets) != len(set(targets)):
+            unresolved.append({"work_item_id": None, "reason": "conditional_repository_collision", "candidates": []})
         if any(dep not in ids for scope in scenario for dep in scope["dependencies"]):
             unresolved.append({"work_item_id": None, "reason": "conditional_dependency_conflict", "candidates": []})
         elif not _acyclic({s["scope_id"]: s["dependencies"] for s in scenario}):
@@ -284,6 +288,10 @@ def main():
         context = json.loads(locations["context"].read_text())
         if args.command == "finalize":
             plan = finalize_repository_plan(context, json.loads(locations["proposal"].read_text()))
+            if context.get("status") == "ready":
+                components = selected.planning.canonical_components()
+                for item in plan["work_items"]:
+                    selected.planning.validate_component(item["component"], components)
             atomic_json(locations["plan"], plan)
             return 0 if plan["ready_for_drafting"] else 2
         validate_repository_plan(json.loads(locations["plan"].read_text()), context)

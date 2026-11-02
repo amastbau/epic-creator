@@ -14,7 +14,9 @@ Usage:
 
 import argparse
 import glob
+import json
 import os
+from pathlib import Path
 import re
 import sys
 
@@ -306,6 +308,18 @@ def render_strategy_section(strat_id):
                       f'{strat_title}</span>')
 
     sid_esc = _html_escape(strat_id)
+    repository_status = ""
+    plan_path = Path(f"artifacts/repository-plans/{strat_id}.json")
+    if plan_path.exists():
+        try:
+            plan = json.loads(plan_path.read_text())
+            context = json.loads(plan_path.with_name(f"{strat_id}-context.json").read_text())
+            reasons = ", ".join(item["reason"] for item in plan.get("unresolved", []))
+            repository_status = (f'<p>Repository planning: {"ready" if plan.get("ready_for_drafting") else "blocked"}; '
+                                 f'inventory revision: {_html_escape(context.get("inventory_revision", "unavailable"))}'
+                                 f'{"; " + _html_escape(reasons) if reasons else ""}</p>')
+        except (OSError, ValueError, KeyError):
+            repository_status = "<p>Repository planning: invalid or missing context</p>"
 
     section = f'''
 <div class="strat-section" id="{sid_esc}">
@@ -314,6 +328,7 @@ def render_strategy_section(strat_id):
     <span style="font-size:0.85rem;font-weight:400;color:var(--muted);">{epic_count} epics &middot; critical path {crit_path}</span>
   </h2>
   {f'<div style="color:var(--muted);font-size:0.9rem;margin:-0.75rem 0 1rem 0;">{title_html}</div>' if title_html else ''}
+  {repository_status}
 
   <div class="summary-row">
     <div class="stat-card">

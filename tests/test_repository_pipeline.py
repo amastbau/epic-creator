@@ -98,3 +98,17 @@ def test_default_repository_workload_fetches_typed_sources(monkeypatch, tmp_path
     state["phase"] = "FETCH"
     config = pipeline_workload.phase_config(state, pipeline.PHASE_CONFIG["FETCH"])
     assert config["vars"]["FETCH_OPTIONS"] == "--workload rhaistrat-strategy"
+
+
+def test_finalizer_rejects_noncanonical_planned_component(monkeypatch, tmp_path, capsys):
+    selected, source = setup_pipeline(monkeypatch, tmp_path, capsys)
+    pipeline.cmd_next_action([])
+    locations = repository_plan.paths("artifacts", source.stem)
+    context = json.loads(locations["context"].read_text())
+    invalid = proposal(context)
+    invalid["work_items"][0]["component"] = "unregistered"
+    repository_plan.atomic_json(locations["proposal"], invalid)
+    monkeypatch.setattr(repository_plan, "get_workload", lambda _: selected)
+    monkeypatch.setattr(sys, "argv", ["repository_plan.py", "finalize", "--workload", selected.id, "--source", source.stem])
+    assert repository_plan.main() == 1
+    assert not locations["plan"].exists()

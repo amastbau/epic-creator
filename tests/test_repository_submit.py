@@ -148,10 +148,12 @@ def test_evidence_export_contains_pinned_sources_without_cache_paths(publication
 
 
 def test_html_report_shows_repository_target(publication):
-    from generate_html_report import render_epic_card
+    from generate_html_report import render_epic_card, render_strategy_section
     _, source, _, _, _ = publication
     data, body = artifacts.read_frontmatter(f"artifacts/epic-tasks/{source.stem}-E001.md")
     html, _, _ = render_epic_card(data, body)
     assert "github.com/example/operator" in html
     assert data["mapping_snapshot_digest"] in html
     assert "Cloudmanager" in html
+    html, _, _ = render_strategy_section(source.stem)
+    assert "fixture-v1" in html

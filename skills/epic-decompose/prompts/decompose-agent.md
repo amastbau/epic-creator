@@ -26,8 +26,10 @@ accuracy validation and tests even for mixed code/docs scopes. A separate docs
 repository gets its own scope. Preserve strategy-wide integration checks in the
 summary, while each epic's modification scope fits its single target repository.
 
-For each scope set `repository_scope`, `work_item_ids`, `components` (all canonical
-components), `component` (the first member), `mapping_snapshot_digest`, scope
+For each scope copy its exact `scope_id` as `repository_scope`, and copy its exact
+`work_item_ids` and ordered `components` list. Set `component` to that list's first
+member. Do not infer extra components from module names or the example below.
+Set `mapping_snapshot_digest`, scope
 priority and the exact `target_repository` object for Implementation. Keep the
 scope's homogeneous `implementation_type`; omit it for mixed/general scopes.
 Set summary `mapping_snapshot_digest` too. Map scope dependencies to generated

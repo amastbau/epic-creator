@@ -334,8 +334,9 @@ def advance(state, dry_run=False):
                         changed |= previous.get("reviewed_decomposition_digest") != decomposition_digest(plan, Path("artifacts"), strat_id)
                     if changed:
                         revised_ids.append(strat_id)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    if bound_workload(state).planning.repository_policy:
+                        write_status(strat_id, "invalid", "re_review_check", str(exc))
         if not revised_ids:
             return "BATCH_DONE", "RE_REVIEW_CHECK → BATCH_DONE: revision made no changes"
         if not dry_run:

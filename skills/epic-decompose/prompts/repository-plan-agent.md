@@ -64,6 +64,10 @@ components from the selected workload's component file. Delivery types are
 `general`, `docs-authoring`, `konflux-onboarding`, `license-validation`,
 `repo-onboarding`.
 
+Every `acceptance_refs` entry must appear in an acceptance criterion's
+`source_ref`. Additional criteria may trace the item's assigned `requirement_refs`.
+Do not reference a requirement or AC assigned only to another work item.
+
 Implementation work also has `resolution`:
 
 ```json

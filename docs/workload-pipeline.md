@@ -61,7 +61,8 @@ Strategy Creator approval labels and the strategy attachment. This skill perform
 Jira reads and creates local artifacts and reports. It does not invoke submission.
 Bootstrap also reads the selected component project and architecture context.
 
-Without `--workload`, invocation preserves the legacy RHAISTRAT path. Explicit
+Without `--workload`, invocation preserves the legacy RHAISTRAT path unless its
+registered workload enables repository planning (see below). Explicit
 selection is passed to fetching and component bootstrap. An intake-only descriptor
 cannot initialize a planning run.
 
@@ -92,6 +93,92 @@ Reports record the workload/version, both digests, gate and each source revision
 [Submission and Jira recovery](workload-submission.md) are available through the
 explicit submission CLI. The planning skill still stops at REPORT; production
 runner configuration and real model quality evaluation remain subsequent work.
+
+## Repository-oriented planning
+
+An optional `planning.repository_policy` inserts `PLAN_REPOSITORIES` between
+FETCH and DECOMPOSE. The shared planner extracts required work and acceptance
+conditions, resolves their contribution repositories using configured evidence,
+then groups work into one Implementation epic per repository in each effective
+conditional scenario. Components, teams and documentation work stay within those
+scopes. Investigations and repository dependencies remain explicit.
+
+```yaml
+planning:
+  # Existing planning fields are still required.
+  repository_policy:
+    mode: one-implementation-epic-per-repository
+    inventory: {source_id: mapping, path: inventory.yaml}
+    sources:
+      - id: mapping
+        url: https://github.com/example/repository-ownership
+        ref: main
+        paths: [inventory.yaml, mapping.md]
+        role: authoritative
+        owner: example-maintainers
+        max_age_seconds: 86400
+      - id: architecture
+        url: https://gitlab.example.org/example/architecture/-/tree/main/release-context
+        ref: main
+        role: supporting
+        owner: example-architecture
+```
+
+These URLs are examples. Repository URLs use optional `paths` (default `.`).
+GitHub/GitLab file and directory links accept an explicit matching `ref`,
+including branch names containing slashes. Files must live in an accessible Git
+repository; credentials come from the existing Git credential helper and must
+never be embedded in URLs. Local `file://` Git sources support isolated tests.
+Supported content is Markdown, YAML, JSON and text. This feature does not import
+Google Docs or invent their Git location.
+
+The inventory follows `_schema/repository-inventory.schema.json`:
+
+```yaml
+version: 1
+revision: example-v1
+repositories:
+  - inventory_key: operator
+    provider: github
+    host: github.com
+    namespace: example
+    repository: operator
+    label: target-repo-operator
+    aliases: [example/operator]
+    approval_reference: approved-contribution-policy-reference
+```
+
+Inventory ownership must approve contribution destinations, including upstream
+versus downstream. Architecture evidence helps resolve scope; an approved repo
+being available does not make it the right destination for every change.
+Optional explicit repository names in strategy text are validated against this
+inventory and the resolved work. No new Jira input field is required.
+
+The context manifest pins Git commits, file hashes, workload and strategy input.
+The planner writes a proposal; `repository_plan.py finalize --workload ID
+--source ISSUE-KEY` atomically validates/finalizes it. Missing evidence, conflicts,
+unknown targets and grouping cycles block drafting with a persisted reason.
+Independent conditional gates that would create simultaneous scopes for one
+repository also block with `conditional_repository_collision`; the planner must
+resolve that conflict rather than silently merging gate semantics.
+Submission re-fetches refs, checks freshness when configured, and requires the
+review to match the current plan and full decomposition content. Replanning
+requires a new run and a fresh review. A policy/source change cannot silently
+resume an old run.
+
+Each Implementation epic carries its canonical `target_repository`,
+`repository_scope`, `work_item_ids`, `components` and `mapping_snapshot_digest`.
+Publication derives exactly one `target-repo-*` label from the inventory in the
+initial Jira create request and attaches pinned evidence. Recovery rejects a
+missing or conflicting live target rather than implicitly relabeling an issue.
+For enabled default workloads, default invocation uses these same checks and
+cannot publish historical artifacts without targets. Unconfigured workloads
+retain their existing behavior.
+
+Both shipped RHAI workloads remain unconfigured for this feature until the
+maintained Git mapping source, contribution inventory and owner expectations
+are verified. Synthetic tests do not establish production source readiness.
+See [repository evaluation](../eval/repository-planning/README.md).
 
 ## Testing without Jira writes
 

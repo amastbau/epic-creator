@@ -139,3 +139,14 @@ def test_revision_content_change_forces_rereview_despite_false_flag(monkeypatch,
     state["phase"] = "RE_REVIEW_CHECK"
     next_phase, _ = pipeline_state.advance(state)
     assert next_phase == "RE_REVIEW"
+
+
+def test_revision_check_reports_broken_repository_binding(monkeypatch, tmp_path, capsys):
+    import pipeline_state
+    source, _, _, _ = reviewed_decomposition(monkeypatch, tmp_path, capsys)
+    state = pipeline_state._load_state()
+    state["phase"] = "RE_REVIEW_CHECK"
+    repository_plan.paths("artifacts", source.stem)["plan"].unlink()
+    pipeline_state.advance(state)
+    status = pipeline_state.read_status(source.stem)
+    assert status and status["status"] == "invalid"
