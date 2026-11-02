@@ -2,6 +2,7 @@
 """Generate run report for a decomposition pipeline run."""
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -46,6 +47,19 @@ def main():
     results = []
     for strat_id in ids:
         entry = {"strat_id": strat_id, "status": "missing"}
+        repository_plan = Path(f"artifacts/repository-plans/{strat_id}.json")
+        if repository_plan.exists():
+            try:
+                planning = json.loads(repository_plan.read_text())
+                entry["repository_planning"] = {
+                    "ready": planning.get("ready_for_drafting", False),
+                    "mapping_snapshot_digest": planning.get("mapping_snapshot_digest"),
+                    "scopes": planning.get("scopes", []),
+                    "unresolved": planning.get("unresolved", []),
+                    "artifact": str(repository_plan),
+                }
+            except (OSError, ValueError):
+                entry["repository_planning"] = {"ready": False, "error": "Invalid repository plan"}
         terminal = statuses.get(strat_id)
         if terminal:
             if terminal["status"] == "skipped":

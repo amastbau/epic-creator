@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 import yaml
 from pipeline_workload import (BOUND_FIELDS, bound_workload, phase_config,
-                               validate_ids, validate_completed, validate_inputs)
+                               validate_ids, validate_completed, validate_inputs, agent_variables)
 from pipeline_status import (all_statuses, clear_all_statuses, clear_status,
                              read_status, write_status)
 from workload import WorkloadError, get_workload
@@ -57,7 +57,7 @@ _BlockDumper.add_representer(str, _str_representer)
 # ---------- Phase enum ----------
 
 PHASES = [
-    "BATCH_START", "FETCH", "DECOMPOSE", "REVIEW_DECOMP",
+    "BATCH_START", "FETCH", "PLAN_REPOSITORIES", "DECOMPOSE", "REVIEW_DECOMP",
     "REVISE_DECOMP",
     "RE_REVIEW_CHECK", "RE_REVIEW", "REVISE_CHECK", "RE_REVISE",
     "BATCH_DONE", "ERROR_COLLECT",
@@ -73,6 +73,13 @@ PHASE_CONFIG = {
         "prompt": "skills/epic-decompose/prompts/fetch-agent.md",
         "ids_file": "tmp/pipeline-active-ids.txt",
         "poll_phase": "fetch",
+        "vars": {"ID": "{ID}"},
+    },
+    "PLAN_REPOSITORIES": {
+        "type": "agent",
+        "prompt": "skills/epic-decompose/prompts/repository-plan-agent.md",
+        "ids_file": "tmp/pipeline-active-ids.txt",
+        "poll_phase": "plan_repositories",
         "vars": {"ID": "{ID}"},
     },
     "DECOMPOSE": {
@@ -257,7 +264,7 @@ def advance(state, dry_run=False):
     Returns (next_phase, summary_line).
     """
     phase = state["phase"]
-    if not dry_run and phase in ("FETCH", "DECOMPOSE", "REVIEW_DECOMP", "REVISE_DECOMP", "RE_REVIEW", "RE_REVISE"):
+    if not dry_run and phase in ("FETCH", "PLAN_REPOSITORIES", "DECOMPOSE", "REVIEW_DECOMP", "REVISE_DECOMP", "RE_REVIEW", "RE_REVISE"):
         config = _phase_config(state)
         _validate_ids_individually(
             state, phase, config["ids_file"], _validate_completed_one)
@@ -277,8 +284,10 @@ def advance(state, dry_run=False):
         return "FETCH", f"BATCH_START → FETCH: batch={batch}"
 
     # --- Linear main sequence ---
-    if phase in MAIN_SEQUENCE[:-1]:
-        nxt = MAIN_SEQUENCE[MAIN_SEQUENCE.index(phase) + 1]
+    sequence = (["FETCH", "PLAN_REPOSITORIES", "DECOMPOSE", "REVIEW_DECOMP"]
+                if bound_workload(state).planning.repository_policy else MAIN_SEQUENCE)
+    if phase in sequence[:-1]:
+        nxt = sequence[sequence.index(phase) + 1]
         if phase == "DECOMPOSE" and not dry_run:
             _compute_ai_scores("tmp/pipeline-active-ids.txt", state)
         return nxt, f"{phase} → {nxt}"
@@ -649,7 +658,7 @@ def cmd_next_action(args):
                     entry["subagent_type"] = config["subagent_type"]
                 entry["prompt_file"] = config["prompt"]
                 var_lines = []
-                for k, v in config.get("vars", {}).items():
+                for k, v in agent_variables(state, strat_id, config.get("vars", {})).items():
                     var_lines.append(
                         f"{k}={v.replace('{ID}', strat_id)}")
                 entry["vars"] = "\n".join(var_lines) + "\n"
