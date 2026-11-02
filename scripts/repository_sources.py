@@ -1,4 +1,4 @@
-"""Retrieve workload-owned Git evidence without passing credentials to agents."""
+"""Fetch Git evidence sources configured by the workload."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
