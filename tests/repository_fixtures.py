@@ -65,3 +65,25 @@ def strategy(tmp_path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("# Synthetic operator strategy\n\nHLR-1: Manager logs.\nHLR-2: Cloudmanager logs.\nAC-1: Manager log tests pass.\nAC-2: Cloudmanager log tests pass.\n")
     return path
+
+
+def proposal(context):
+    return {"schema_version": 1, "source_key": "RHAISTRAT-9001",
+            "mapping_snapshot_digest": context["digest"],
+            "requirements": [{"id": key, "kind": kind, "quote": quote}
+                             for key, kind, quote in [
+                                 ("HLR-1", "requirement", "HLR-1: Manager logs."),
+                                 ("HLR-2", "requirement", "HLR-2: Cloudmanager logs."),
+                                 ("AC-1", "acceptance", "AC-1: Manager log tests pass."),
+                                 ("AC-2", "acceptance", "AC-2: Cloudmanager log tests pass.")]],
+            "work_items": [
+                {"id": f"W{n}", "kind": "implementation", "description": desc,
+                 "requirement_refs": [f"HLR-{n}"], "acceptance_refs": [f"AC-{n}"],
+                 "acceptance_criteria": [{"source_ref": f"AC-{n}", "text": f"{desc} tests pass"}],
+                 "priority": "P0", "component": component, "team": team,
+                 "delivery_type": "general", "depends_on": [],
+                 "resolution": {"status": "resolved", "target_key": "operator",
+                                "evidence_refs": [{"source_id": "mapping", "path": "mapping.md",
+                                    "quote": "Manager and cloudmanager changes belong in operator."}]}}
+                for n, desc, component, team in [(1, "Manager logging", "Operator", "Team A"),
+                                                (2, "Cloudmanager logging", "Cloudmanager", "Team B")]]}

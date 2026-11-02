@@ -48,6 +48,27 @@ def source_binding(manifests):
             for source in manifests]
 
 
+def _binding(context):
+    fields = ("schema_version", "source_key", "workload_id", "workload_version",
+              "workload_digest", "planning_digest", "strategy_sha256", "policy")
+    return {**{key: context[key] for key in fields},
+            "sources": source_binding(context["sources"]), "inventory": context["inventory_document"]}
+
+
+def validate_context_snapshot(context):
+    if context.get("status") != "ready":
+        raise WorkloadError("Repository context is unresolved")
+    if (digest(_binding(context)) != context["digest"]
+            or validate_inventory(context["inventory_document"]) != context["inventory"]):
+        raise WorkloadError("Repository context content changed")
+    if hashlib.sha256(Path(context["strategy_path"]).read_bytes()).hexdigest() != context["strategy_sha256"]:
+        raise WorkloadError("Repository strategy input changed")
+    for source in context["sources"]:
+        for file in source["files"].values():
+            if hashlib.sha256(Path(file["local_path"]).read_bytes()).hexdigest() != file["sha256"]:
+                raise WorkloadError("Repository evidence content changed")
+
+
 def load_repository_context(selected, source_path: Path, artifacts_dir: Path) -> dict:
     policy = selected.planning.repository_policy
     if not policy:
@@ -70,15 +91,15 @@ def load_repository_context(selected, source_path: Path, artifacts_dir: Path) ->
     except (WorkloadError, OSError, KeyError, StopIteration, yaml.YAMLError) as exc:
         return {**context, "status": "blocked", "reason": "source_unavailable",
                 "inventory": {}, "sources": [], "digest": digest({**context, "cache_root": None})}
-    binding = {k: v for k, v in context.items() if k != "cache_root"}
-    binding.update(sources=source_binding(sources), inventory=inventory_data)
-    return {**context, "status": "ready", "sources": sources, "inventory": inventory,
-            "inventory_revision": inventory_data["revision"], "digest": digest(binding)}
+    result = {**context, "status": "ready", "sources": sources, "inventory": inventory,
+              "strategy_path": str(Path(source_path).resolve()), "inventory_document": inventory_data,
+              "inventory_revision": inventory_data["revision"]}
+    result["digest"] = digest(_binding(result))
+    return result
 
 
 def assert_context_current(context: dict, selected, source_path: Path) -> None:
-    if context.get("status") != "ready":
-        raise WorkloadError("Repository context is unresolved")
+    validate_context_snapshot(context)
     for source in context["sources"]:
         if source.get("max_age_seconds") is not None:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(source["fetched_at"])).total_seconds()
