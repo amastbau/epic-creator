@@ -6,9 +6,7 @@
 
 **Tech Stack:** Existing Python 3.11/3.12, PyYAML, jsonschema, pytest, Markdown agent policies, workload YAML, Jira REST integration. No new model client or runtime dependency is planned.
 
-**Architecture decision:** [ADR 0002: Assign one target repository to each implementation epic](https://github.com/fullsend-ai/epic-creator/pull/45). This proposal remains under review.
-
-**Design:** [Repository-oriented epic creation](repository-planning-design.md). Read it before execution; it defines boundary rules and artifact shapes.
+**Architecture decision:** [ADR 0002: Assign one target repository to each implementation epic](https://github.com/fullsend-ai/epic-creator/pull/45). This proposal remains under review; it defines repository boundaries and the producer contract.
 
 ## Global Constraints
 
