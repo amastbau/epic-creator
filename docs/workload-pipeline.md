@@ -202,6 +202,11 @@ maintained Git mapping source, contribution inventory and owner expectations
 are verified. Synthetic tests do not establish production source readiness.
 See [repository evaluation](../eval/repository-planning/README.md).
 
+The architecture proposal is [ADR 0002 in PR #45](https://github.com/fullsend-ai/epic-creator/pull/45).
+See the [implementation design](repository-planning-design.md),
+[implementation plan](repository-planning-plan.md) and
+[validation results](repository-planning-validation.md) for this producer change.
+
 ## Testing without Jira writes
 
 Run the deterministic local contract tests:

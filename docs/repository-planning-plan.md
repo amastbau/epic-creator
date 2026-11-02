@@ -1,14 +1,14 @@
 # Repository-oriented Epic Creation Implementation Plan
 
-> **For agentic workers:** Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This document plans the work; it does not start implementation.
-
 **Goal:** Resolve repository scopes from the approved strategy first, then create implementation epics whose scope, acceptance criteria and Jira target each belong to one repository.
 
 **Architecture:** Introduce a shared repository-planning phase between intake and epic drafting. Workload data supplies the contribution inventory and evidence; deterministic finalization groups required work by canonical repository. Decomposition, review, revision and submission consume that same bound plan.
 
 **Tech Stack:** Existing Python 3.11/3.12, PyYAML, jsonschema, pytest, Markdown agent policies, workload YAML, Jira REST integration. No new model client or runtime dependency is planned.
 
-**Spec:** [Repository-oriented epic design](../specs/2026-11-02-epic-creator-repository-oriented-epics-design.md). Read it before execution; it defines boundary rules and artifact shapes.
+**Architecture decision:** [ADR 0002: Assign one target repository to each implementation epic](https://github.com/fullsend-ai/epic-creator/pull/45). This proposal remains under review.
+
+**Design:** [Repository-oriented epic creation](repository-planning-design.md). Read it before execution; it defines boundary rules and artifact shapes.
 
 ## Global Constraints
 

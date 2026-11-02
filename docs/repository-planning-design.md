@@ -1,8 +1,16 @@
 # Create Epic Creator epics around repository boundaries
 
-**Status:** Proposed implementation design; no runtime changes or new evaluation runs.
+**Status:** Implementation design for the proposed repository-mapping contract.
+ADR 0002 remains Proposed; current implementation evidence and activation limits
+are recorded in the [validation report](repository-planning-validation.md).
 **Date:** 2026-11-02
 **Delivery:** AISDLC-547 under AISDLC-90; producer contract coordinated with AISDLC-548.
+
+**Architecture decision:** [ADR 0002: Assign one target repository to each implementation epic](https://github.com/fullsend-ai/epic-creator/pull/45).
+This document details the producer implementation of that proposal, including
+repository planning before epic drafting.
+
+Implementation steps are in the [implementation plan](repository-planning-plan.md).
 
 ## Required outcome
 
