@@ -197,7 +197,7 @@ def _find_submittable_strats(artifacts_dir):
     return strat_ids
 
 
-def _build_plan(epics, valid_components, submission=None):
+def _build_plan(epics, valid_components, submission=None, repository_inventory=None):
     """Build submission plan from epic artifacts.
 
     Returns list of plan entries with all fields needed for submission.
@@ -252,6 +252,17 @@ def _build_plan(epics, valid_components, submission=None):
             "body": body,
             "jira_key": jira_key,
         })
+        if repository_inventory is not None:
+            entry = plan[-1]
+            entry["components"] = data["components"]
+            entry["repository_label"] = None
+            if epic_type == "Implementation":
+                target = data["target_repository"]
+                approved = repository_inventory[target["inventory_key"]]
+                if any(target[name] != approved[name] for name in target):
+                    raise ValueError(f"{epic_id}: target differs from approved inventory")
+                entry["repository_label"] = approved["label"]
+                labels.append(approved["label"])
 
     return plan
 
@@ -676,6 +687,11 @@ def main():
     if not args.strat_ids and not args.all:
         parser.error("Provide source issue IDs or use --all")
 
+    if not args.workload:
+        from workload import get_workload
+        default = get_workload("rhaistrat-strategy")
+        if default.planning and default.planning.repository_policy:
+            args.workload = default.id
     if args.workload:
         from workload_submit import run_submission
         sys.exit(run_submission(args))

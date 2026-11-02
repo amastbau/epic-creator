@@ -180,6 +180,13 @@ def render_epic_card(fm, body):
                    .replace('${', '\\${'))
 
     gate_html = render_gate_info(fm)
+    repository_html = ""
+    if fm.get("target_repository"):
+        target = fm["target_repository"]
+        canonical = f"https://{target['host']}/{target['namespace']}/{target['repository']}"
+        repository_html = f'<div class="meta-item"><span class="meta-label">Repository:</span><span class="meta-value">{_html_escape(canonical)}</span></div>'
+    if fm.get("mapping_snapshot_digest"):
+        repository_html += f'<div class="meta-item"><span class="meta-label">Mapping snapshot:</span><span class="meta-value">{_html_escape(fm["mapping_snapshot_digest"])}</span></div>'
 
     return f'''
 <div class="card" id="{_html_escape(eid)}">
@@ -191,7 +198,8 @@ def render_epic_card(fm, body):
     {type_badge(fm.get("type", ""), impl_type)}
   </div>
   <div class="meta-grid">
-    <div class="meta-item"><span class="meta-label">Component:</span><span class="meta-value">{_html_escape(fm.get("component", ""))}</span></div>
+    <div class="meta-item"><span class="meta-label">Component:</span><span class="meta-value">{_html_escape(", ".join(fm.get("components", [fm.get("component", "")])) )}</span></div>
+    {repository_html}
     <div class="meta-item"><span class="meta-label">Team:</span><span class="meta-value">{_html_escape(fm.get("team", ""))}</span></div>
     <div class="meta-item"><span class="meta-label">Dependencies:</span>{render_deps(fm.get("dependencies", []), fm.get("parent_strat", ""))}</div>
   </div>

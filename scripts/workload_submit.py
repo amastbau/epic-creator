@@ -20,7 +20,7 @@ import yaml
 import artifact_utils as artifacts
 from fetch_strategy import _select_strategy_attachment
 import jira_utils as jira
-from pipeline_workload import source_metadata, validate_artifact, validate_decomposition
+from pipeline_workload import source_metadata, validate_artifact, validate_decomposition, repository_plan_for
 import workload
 from workload import WorkloadError
 
@@ -89,13 +89,37 @@ def preflight(selected, key, root):
     components = selected.planning.canonical_components()
     for _, data, _ in main + [entry for entries in branches.values() for entry in entries]:
         selected.planning.validate_component(data["component"], components)
-    plan = _build_plan(main, components, selected.submission)
+    repository_context = repository_plan = None
+    if selected.planning.repository_policy:
+        repository_context = repository_plan_for(state, key, root, prepare=True)
+        repository_plan = repository_plan_for(state, key, root)
+    plan = _build_plan(main, components, selected.submission,
+                       repository_context["inventory"] if repository_context else None)
     for entry in plan:
+        description = _build_description(entry["body"])
+        if repository_context:
+            data = by_id[entry["epic_id"]]
+            scope = next(scope for scope in repository_plan["scopes"] if scope["scope_id"] == data["repository_scope"])
+            target = data.get("target_repository")
+            if target:
+                url = f"https://{target['host']}/{target['namespace']}/{target['repository']}"
+                description += f"\n\n## Target repository\n\n{url}\n\nInventory key: {target['inventory_key']}\n"
+            description += f"\nMapping snapshot: {repository_context['digest']}\n"
+            entry["repository_evidence"] = {
+                "mapping_snapshot_digest": repository_context["digest"],
+                "repository_plan_digest": repository_plan["digest"],
+                "inventory_revision": repository_context["inventory_revision"],
+                "scope": scope,
+                "work_items": [item for item in repository_plan["work_items"] if item["id"] in scope["work_item_ids"]],
+                "sources": [{**{k: v for k, v in source.items() if k not in ("files", "fetched_at")},
+                             "files": {name: {"sha256": file["sha256"]} for name, file in source["files"].items()}}
+                            for source in repository_context["sources"]],
+                "inventory_entry": repository_context["inventory"].get(target["inventory_key"]) if target else None}
         identity = "epic-creator-id-" + _digest([selected.id, key, entry["epic_id"]])
         desired = dict(project=selected.submission.project, issue_type=selected.submission.issue_type,
-            summary=entry["title"], description_adf=jira.markdown_to_adf(_build_description(entry["body"])),
+            summary=entry["title"], description_adf=jira.markdown_to_adf(description),
             priority=entry["priority"], labels=entry["labels"],
-            components=[entry["component"]] if entry["component"] else [],
+            components=entry.get("components", [entry["component"]] if entry["component"] else []),
             parent_key=key if selected.submission.parent["relation"] == "parent" else None)
         reviewed = {name: value for name, value in by_id[entry["epic_id"]].items() if name != "jira_key"}
         gated_branches = [({name: value for name, value in data.items() if name != "jira_key"}, body)
@@ -108,6 +132,7 @@ def preflight(selected, key, root):
         desired["labels"] = desired["labels"] + [identity, fingerprint]
         entry.update(identity=identity, fingerprint=fingerprint, desired=desired)
     return {"key": key, "plan": plan, "branches": branches, "metadata": metadata,
+            "repository_context": repository_context,
             "source_body": artifacts.read_frontmatter(root / f"strat-tasks/{key}.md")[1].strip()}
 
 
@@ -184,6 +209,16 @@ def _verify_issue(selected, entry, issue, source):
     expected = source if selected.submission.parent["relation"] == "parent" else None
     if parent is not None and parent != expected:
         raise WorkloadError(f"{issue['key']}: conflicting Jira parent")
+    if "repository_label" in entry:
+        actual = {label for label in fields.get("labels", []) if label.startswith("target-repo-")}
+        expected_labels = {entry["repository_label"]} if entry["repository_label"] else set()
+        if actual != expected_labels:
+            raise WorkloadError(f"{issue['key']}: conflicting or missing repository label; reconcile explicitly")
+        desired = entry["desired"]
+        if (fields.get("summary") != desired["summary"]
+                or fields.get("description") != desired["description_adf"]
+                or sorted(c["name"] for c in fields.get("components", [])) != sorted(desired["components"])):
+            raise WorkloadError(f"{issue['key']}: published repository scope differs from reviewed plan")
 
 
 def _resolve(selected, entry, record, source, credentials):
@@ -209,7 +244,7 @@ def _resolve(selected, entry, record, source, credentials):
         raise WorkloadError(f"{entry['epic_id']}: conflicting Jira keys; reconcile duplicates manually")
     if keys:
         key = keys.pop()
-        issue = jira.get_issue(*credentials, key, fields=["project", "issuetype", "labels", "parent"])
+        issue = jira.get_issue(*credentials, key, fields=["project", "issuetype", "labels", "parent", "summary", "description", "components"])
         _verify_issue(selected, entry, issue, source)
         return key
     if record:
@@ -241,6 +276,9 @@ def _ensure_attachment(credentials, key, stem, extension, content):
 
 def _execute(selected, submission, root, credentials):
     key, plan = submission["key"], submission["plan"]
+    if submission.get("repository_context"):
+        from repository_context import assert_context_current
+        assert_context_current(submission["repository_context"], selected, root / f"strat-tasks/{key}.md")
     with _journal(root, selected, key, credentials[0]) as (path, journal):
         source = _source_issue(selected, submission, credentials)
         if set(journal["epics"]) - {e["epic_id"] for e in plan}:
@@ -277,7 +315,9 @@ def _execute(selected, submission, root, credentials):
         server, user, token = credentials
         for entry in plan:
             target = resolved[entry["epic_id"]]
-            issue = jira.get_issue(*credentials, target, fields=["labels", "parent"])
+            issue = jira.get_issue(*credentials, target, fields=["project", "issuetype", "labels", "parent", "summary", "description", "components"])
+            if "repository_label" in entry:
+                _verify_issue(selected, entry, issue, key)
             body = {}
             missing_labels = [label for label in entry["desired"]["labels"] if label not in issue["fields"].get("labels", [])]
             if missing_labels:
@@ -296,6 +336,9 @@ def _execute(selected, submission, root, credentials):
             data, _ = artifacts.read_frontmatter(entry["path"])
             content = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
             _ensure_attachment(credentials, resolved[entry["epic_id"]], "frontmatter", "yaml", content)
+            if "repository_evidence" in entry:
+                _ensure_attachment(credentials, resolved[entry["epic_id"]], "repository-evidence", "json",
+                                   json.dumps(entry["repository_evidence"], sort_keys=True, indent=2))
         from submit import _build_branch_plan_md
         for (branch, gate), entries in sorted(submission["branches"].items()):
             _ensure_attachment(credentials, resolved[gate], f"branch-{branch.lower()}-plan", "md",
