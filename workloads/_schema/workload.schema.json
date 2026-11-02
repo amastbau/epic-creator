@@ -96,33 +96,90 @@
     "submission": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["project", "issue_type", "parent", "dependency_link_type", "labels"],
+      "required": [
+        "project",
+        "issue_type",
+        "parent",
+        "dependency_link_type",
+        "labels"
+      ],
       "properties": {
-        "project": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
-        "issue_type": {"type": "string", "minLength": 1},
-        "dependency_link_type": {"type": "string", "minLength": 1},
+        "project": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "issue_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dependency_link_type": {
+          "type": "string",
+          "minLength": 1
+        },
         "parent": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["relation"],
+          "required": [
+            "relation"
+          ],
           "properties": {
-            "relation": {"enum": ["parent", "link"]},
-            "link_type": {"type": "string", "minLength": 1}
+            "relation": {
+              "enum": [
+                "parent",
+                "link"
+              ]
+            },
+            "link_type": {
+              "type": "string",
+              "minLength": 1
+            }
           },
-          "if": {"properties": {"relation": {"const": "link"}}},
-          "then": {"required": ["link_type"]},
-          "else": {"not": {"required": ["link_type"]}}
+          "if": {
+            "properties": {
+              "relation": {
+                "const": "link"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "link_type"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "link_type"
+              ]
+            }
+          }
         },
         "labels": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["created", "investigation", "implementation_prefix", "ai_prefix", "needs_component"],
+          "required": [
+            "created",
+            "investigation",
+            "implementation_prefix",
+            "ai_prefix",
+            "needs_component"
+          ],
           "properties": {
-            "created": {"$ref": "#/$defs/label"},
-            "investigation": {"$ref": "#/$defs/label"},
-            "implementation_prefix": {"$ref": "#/$defs/label"},
-            "ai_prefix": {"$ref": "#/$defs/label"},
-            "needs_component": {"$ref": "#/$defs/label"}
+            "created": {
+              "$ref": "#/$defs/label"
+            },
+            "investigation": {
+              "$ref": "#/$defs/label"
+            },
+            "implementation_prefix": {
+              "$ref": "#/$defs/label"
+            },
+            "ai_prefix": {
+              "$ref": "#/$defs/label"
+            },
+            "needs_component": {
+              "$ref": "#/$defs/label"
+            }
           }
         }
       }
@@ -210,11 +267,98 @@
         "artifact_template": {
           "type": "string",
           "pattern": "^workloads/policies/[A-Za-z0-9_./-]+\\.md$"
+        },
+        "repository_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "inventory",
+            "sources"
+          ],
+          "properties": {
+            "mode": {
+              "const": "one-implementation-epic-per-repository"
+            },
+            "inventory": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_id",
+                "path"
+              ],
+              "properties": {
+                "source_id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "sources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "url",
+                  "ref",
+                  "role",
+                  "owner"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*$"
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "paths": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "role": {
+                    "enum": [
+                      "authoritative",
+                      "supporting"
+                    ]
+                  },
+                  "owner": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "max_age_seconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
   },
   "$defs": {
-    "label": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$", "maxLength": 120}
+    "label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "maxLength": 120
+    }
   }
 }

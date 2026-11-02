@@ -39,6 +39,7 @@ class PlanningPolicy:
     implementation_medium: int
     investigation_high: int
     investigation_low: int
+    repository_policy: dict | None = None
 
     @property
     def max_score(self):
@@ -97,6 +98,14 @@ def _load_planning(data):
     if data is None:
         return None
     root = WORKLOADS_DIR.parent.resolve()
+    repository_policy = data.get("repository_policy")
+    if repository_policy:
+        from repository_sources import normalize_git_source, _path
+        sources = [normalize_git_source(item) for item in repository_policy["sources"]]
+        ids = [item["id"] for item in sources]
+        if len(ids) != len(set(ids)) or repository_policy["inventory"]["source_id"] not in ids:
+            raise WorkloadError("Duplicate or missing repository inventory source")
+        _path(repository_policy["inventory"]["path"])
     paths, contents = {}, {}
     for stage in ("decompose", "review", "revise", "scoring", "artifact_template"):
         reference = Path(data[stage])
@@ -126,7 +135,8 @@ def _load_planning(data):
                           criteria=tuple(gate["criteria"]), points_per_criterion=gate["points_per_criterion"],
                           pass_score=gate["pass_score"], zero_fails=gate["zero_fails"], digest=digest,
                           implementation_high=implementation["high_min"], implementation_medium=implementation["medium_min"],
-                          investigation_high=investigation["high_min"], investigation_low=investigation["low_max"])
+                          investigation_high=investigation["high_min"], investigation_low=investigation["low_max"],
+                          repository_policy=data.get("repository_policy"))
 
 
 def _tracker_binding(issue):
