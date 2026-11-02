@@ -170,7 +170,7 @@ actual controlled repository labels to the reviewed target.
 
 ### Task 6: Prove creation-time behavior and activate prepared workloads
 
-**Files:** Create `tests/test_repository_creation_e2e.py`, `tests/fixtures/repository-planning/`, `eval/repository-planning/README.md`, `eval/scripts/check_repository_plan.py`. Modify `eval/scripts/stage-case.sh`, `docs/workload-pipeline.md`, registered workload YAML and `tests/test_fullsend_package.py`. Add versioned `workloads/repositories/rhai/v1/` data only after source/inventory ownership and contribution policy are verified.
+**Files:** Create `tests/test_repository_creation_e2e.py`, `tests/fixtures/repository-planning/`, `eval/repository-planning/README.md`, `eval/scripts/check_repository_plan.py`. Modify `tests/test_workload_e2e.py` and `docs/workload-pipeline.md`. Add registered workload configuration and versioned `workloads/repositories/rhai/v1/` data only after source/inventory ownership and contribution policy are verified.
 
 **Interfaces:** Add `evaluate_repository_run(run_dir: Path, expected_path: Path) -> dict`
 in `eval/scripts/check_repository_plan.py`, with CLI `RUN_DIR --expected FILE`.

@@ -92,7 +92,7 @@ if [ -d .git ]; then
   git add -A >/dev/null 2>&1 || true
   GIT_AUTHOR_NAME=eval-harness GIT_AUTHOR_EMAIL=eval@harness \
   GIT_COMMITTER_NAME=eval-harness GIT_COMMITTER_EMAIL=eval@harness \
-    git commit --signoff -q -m "staged" --allow-empty >/dev/null 2>&1 || true
+    git commit -q -m "staged" --allow-empty >/dev/null 2>&1 || true
   log "git baseline re-committed after staging"
   # The runner stages the plugin into .staged-plugins/ AFTER this hook runs;
   # exclude it so collect.py's modified-files diff never picks up the copy.

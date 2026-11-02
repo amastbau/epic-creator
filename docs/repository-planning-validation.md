@@ -6,10 +6,30 @@ Initial implementation commit: `bba8726d82e8edd3e3cf6f0c005c4f46aa339abd`.
 
 ## Deterministic checks
 
-Local full suites on Python 3.11.15 and 3.12.13 each passed **693 tests**, with
-five opt-in model tests skipped. Both include the unchanged legacy workload
-path. Earlier additional report/evaluator checks passed 38 tests, with three model tests
-skipped. `git diff --check` and the existing evaluation PII scanner passed.
+After the scope cleanup, local full suites on Python 3.11.15 and 3.12.13 each
+reported **689 passed, 5 skipped, 4 failed**. The four failures exactly match
+the inherited package-fixture failures reproduced on PR #40 below; no other
+tests failed. Earlier additional report/evaluator checks passed 38 tests, with
+three model tests skipped. `git diff --check` and the existing evaluation PII
+scanner passed.
+
+The full PR scope review removed two unrelated changes: a sign-off addition in
+`eval/scripts/stage-case.sh` and dependency-copy repairs in
+`tests/test_fullsend_package.py`. Both files now match PR #40 exactly. Remaining
+changes implement repository planning/guidance, artifact and review binding,
+publication/recovery, reports, or their tests and documentation.
+
+On an isolated checkout of exact PR #40 base `424bffd790afa96a91244654a59f4c3d11800307`,
+the package suite has **4 failed, 46 passed**. These inherited failures are:
+
+- `test_sandbox_bootstrap_reuses_prepared_inputs`: fixture omits `workload`.
+- `test_project_compact_hook_activation[epic-creator-False-True]`: fixture omits `pipeline_workload`.
+- `test_project_compact_hook_activation[epic-creator-True-True]`: same missing module.
+- `test_project_hook_does_not_duplicate_plugin_hook`: same missing module.
+
+Their repairs belong to the base change rather than this repository-planning PR.
+Earlier 693-pass full-suite results included those unrelated repairs and are
+superseded by the post-cleanup results above.
 
 The tests exercise Git document links, commit/content binding, changed refs,
 unavailable evidence, source coverage, repository grouping, dependencies,

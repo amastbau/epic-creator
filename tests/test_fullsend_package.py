@@ -424,8 +424,7 @@ def test_sandbox_bootstrap_reuses_prepared_inputs(tmp_path):
     scripts = checkout / "scripts"
     scripts.mkdir(parents=True)
     for name in (
-        "fetch-architecture-context.sh", "fetch_components.py", "jira_utils.py", "workload.py",
-        "repository_sources.py",
+        "fetch-architecture-context.sh", "fetch_components.py", "jira_utils.py",
     ):
         shutil.copy2(ROOT / "scripts" / name, scripts / name)
 
@@ -511,9 +510,7 @@ def _hook_checkout(tmp_path):
     checkout = tmp_path / "checkout"
     scripts = checkout / "scripts"
     scripts.mkdir(parents=True)
-    for module in (ROOT / "scripts").glob("*.py"):
-        shutil.copy2(module, scripts / module.name)
-    shutil.copytree(ROOT / "workloads", checkout / "workloads")
+    shutil.copy2(ROOT / "scripts/pipeline_state.py", scripts / "pipeline_state.py")
     state = checkout / "tmp/pipeline-state.yaml"
     state.parent.mkdir()
     state.write_text("phase: DECOMPOSE\n")
