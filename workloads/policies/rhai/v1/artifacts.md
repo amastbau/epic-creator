@@ -26,3 +26,13 @@ stakeholder commitments:
 
 Signal rationales go in a separate file, never in the epic body. Branch epics
 use the same body structure as main-plan epics.
+
+## Repository-enabled artifacts
+
+When REPOSITORY_PLAN is supplied, include repository scope, canonical target and
+work IDs in the summary Epic List. Retain source-level integration acceptance and
+its participating scopes. Per-epic Scope/ACs include all assigned work, owners,
+priorities and conditional facets; modifications must fit that epic's target repo.
+Required documentation in a mixed code/docs scope keeps its technical accuracy
+review AC. Repository metadata is set through frontmatter.py, including all
+canonical components and the primary component. No duplicate same-repo epic.

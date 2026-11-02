@@ -21,6 +21,22 @@ Epic files: artifacts/epic-tasks/{ID}-E*.md
 3. Read the decomposition summary
 4. Read all epic files matching `artifacts/epic-tasks/{ID}-E*.md`
 
+## Preserve repository boundaries (when REPOSITORY_PLAN is supplied)
+
+Read the bound plan/context before applying review findings. Its repository scopes
+and work assignments take precedence over the domain policy's component/team,
+subsystem, priority, work-product and triage split/merge instructions. Never split
+same-repo manager/cloudmanager or same-repo docs into sibling implementations;
+never merge scopes for different repositories. Put size/priority distinctions into
+work sections or later stories. Preserve components, owners, required AC facets,
+conditional scope and genuine dependencies. A target field must agree with actual
+scope/AC text. A plan-level target/evidence defect needs replanning and fresh
+review; report it rather than editing the bound plan or substituting a default.
+
+After any actual content change, set `revised=true`; the pipeline also detects
+changes from content digests and forces fresh review even if this flag is wrong.
+Maintain all repository metadata when correcting prose or scoring rationales.
+
 ## Selected workload policy
 
 Read `{POLICY_FILE}` and follow its rules for this stage.

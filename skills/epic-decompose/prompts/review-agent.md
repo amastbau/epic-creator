@@ -26,6 +26,34 @@ python3 scripts/frontmatter.py set --source artifacts/strat-tasks/{ID}.md artifa
     error="decomposition summary missing"
 ```
 
+## Repository scope review (when REPOSITORY_PLAN is supplied)
+
+Read the bound plan/context and the original strategy before scoring. Verify
+exactly one Implementation epic per repository scope in every effective scenario,
+correct canonical target and all assigned work IDs. Read the actual epic prose:
+a correct repository field does not excuse ACs requiring code changes in another
+repository. Cross-repo API references/tests are valid; cross-repo modifications
+belong to their own repository epic. Compare all work and AC facets to original
+source intent, not merely ID lists. Check authoritative citations establish target
+correctness, not just inventory membership. Wrong approved repository fails.
+
+The repository plan overrides domain component/team/subsystem/priority/docs/size
+split rules and single-epic triage when multiple repo scopes exist. Same-repo
+manager/cloudmanager and same-repo docs remain one Implementation epic. Keep
+all ownership, priority, docs accuracy ACs and integration verification. Branches
+must remain mutually exclusive; genuine investigation gates/dependencies survive.
+
+Missing/wrong target, mixed-repository modification scope, duplicate repository
+scope or snapshot mismatch is a major/critical Epic Boundaries defect and scores
+that criterion zero. Missing work/ACs scores the existing Coverage/Completeness
+criterion zero. Defective evidence or source interpretation is a blocking defect.
+Never accept a plan solely because deterministic reference checks passed.
+
+Write the body first, then finish via `frontmatter.py set --source` as below. For
+repository-enabled workloads it automatically stamps `repository_plan_digest`
+and `reviewed_decomposition_digest` from the actual plan and reviewed files.
+Any subsequent semantic change invalidates the review and requires re-review.
+
 ## Selected workload policy
 
 Read `{POLICY_FILE}` and follow its rules for this stage.

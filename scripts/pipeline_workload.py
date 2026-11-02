@@ -137,6 +137,12 @@ def validate_artifact(state, key, path, schema, artifacts_dir="artifacts"):
         raise WorkloadError(f"{key}: epic identity conflicts with filename at {path}")
     if schema == "decomp-review" and source:
         bound_workload(state).planning.validate_review(data)
+    if schema == "decomp-review" and bound_workload(state).planning.repository_policy:
+        from repository_plan import decomposition_digest
+        plan = repository_plan_for(state, key, artifacts_dir)
+        if (data.get("repository_plan_digest") != plan["digest"]
+                or data.get("reviewed_decomposition_digest") != decomposition_digest(plan, Path(artifacts_dir), key)):
+            raise WorkloadError("Review no longer matches repository plan or decomposition content")
     return data
 
 
@@ -147,8 +153,13 @@ def validate_decomposition(state, key, artifacts_dir="artifacts"):
     branches = sorted(directory.glob(f"{key}-BRANCH-*-E[0-9][0-9][0-9].md"))
     if not main or summary["epic_count"] not in {len(main), len(main) + len(branches)}:
         raise WorkloadError(f"{key}: summary epic count does not match generated files")
-    for path in main + branches:
-        validate_artifact(state, key, path, "epic-task", artifacts_dir)
+    epics = [validate_artifact(state, key, path, "epic-task", artifacts_dir) for path in main + branches]
+    if bound_workload(state).planning.repository_policy:
+        from repository_plan import validate_epic_scopes
+        plan = repository_plan_for(state, key, artifacts_dir)
+        if summary.get("mapping_snapshot_digest") != plan["mapping_snapshot_digest"]:
+            raise WorkloadError("Decomposition summary has wrong repository mapping snapshot")
+        validate_epic_scopes(plan, epics)
 
 
 def validate_completed(state, phase, ids):

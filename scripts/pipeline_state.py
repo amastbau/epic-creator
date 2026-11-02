@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from datetime import datetime, timezone
 
 import yaml
@@ -324,7 +325,14 @@ def advance(state, dry_run=False):
             if os.path.exists(decomp_path):
                 try:
                     data, _ = read_frontmatter(decomp_path)
-                    if data and data.get("revised"):
+                    changed = bool(data and data.get("revised"))
+                    if bound_workload(state).planning.repository_policy:
+                        from repository_plan import decomposition_digest
+                        from pipeline_workload import repository_plan_for
+                        plan = repository_plan_for(state, strat_id)
+                        previous, _ = read_frontmatter(f"artifacts/epic-reviews/{strat_id}-decomp-review.md")
+                        changed |= previous.get("reviewed_decomposition_digest") != decomposition_digest(plan, Path("artifacts"), strat_id)
+                    if changed:
                         revised_ids.append(strat_id)
                 except Exception:
                     pass

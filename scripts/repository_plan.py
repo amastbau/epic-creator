@@ -211,6 +211,52 @@ def validate_repository_plan(plan: dict, context: dict) -> None:
         raise WorkloadError("Repository plan has unresolved required work")
 
 
+def validate_epic_scopes(plan: dict, epics: list[dict]) -> None:
+    if not plan.get("ready_for_drafting"):
+        raise WorkloadError("Repository plan is unresolved")
+    scopes = {scope["scope_id"]: scope for scope in plan["scopes"]}
+    actual = {}
+    for epic in epics:
+        scope_id = epic.get("repository_scope")
+        if scope_id not in scopes or scope_id in actual:
+            raise WorkloadError("Missing or duplicate repository epic scope")
+        scope = scopes[scope_id]
+        if (sorted(epic.get("work_item_ids", [])) != sorted(scope["work_item_ids"])
+                or epic.get("mapping_snapshot_digest") != plan["mapping_snapshot_digest"]):
+            raise WorkloadError("Epic work/snapshot conflicts with repository plan")
+        expected_type = "Implementation" if scope["kind"] == "implementation" else "Investigation"
+        if epic.get("type") != expected_type or epic.get("target_repository") != scope.get("target_repository"):
+            raise WorkloadError("Epic type/target conflicts with repository scope")
+        if epic.get("components") != scope["components"] or epic.get("component") != scope["components"][0]:
+            raise WorkloadError("Epic components conflict with repository scope")
+        if epic.get("implementation_type") != scope["implementation_type"]:
+            raise WorkloadError("Epic delivery type conflicts with repository scope")
+        if epic.get("priority") != scope["priority"] or epic.get("branch") != scope.get("branch"):
+            raise WorkloadError("Epic priority/branch conflicts with repository scope")
+        actual[scope_id] = epic
+    if actual.keys() != scopes.keys():
+        raise WorkloadError("Decomposition omits repository scopes")
+    for scope_id, epic in actual.items():
+        scope = scopes[scope_id]
+        expected = sorted(actual[dep]["epic_id"] for dep in scope["dependencies"])
+        if sorted(epic.get("dependencies", [])) != expected:
+            raise WorkloadError("Epic dependencies conflict with repository scope plan")
+        if scope.get("gated_by") and epic.get("gated_by") != actual[scope["gated_by"]]["epic_id"]:
+            raise WorkloadError("Epic Investigation gate conflicts with repository scope plan")
+
+
+def decomposition_digest(plan: dict, artifacts_dir: Path, source_key: str) -> str:
+    from artifact_utils import read_frontmatter
+    files = []
+    for path in sorted((Path(artifacts_dir) / "epic-tasks").glob(f"{source_key}-*.md")):
+        metadata, body = read_frontmatter(path)
+        metadata = {k: v for k, v in metadata.items() if k not in ("jira_key", "revised", "decompose_complete")}
+        files.append({"name": path.name, "metadata": metadata, "body": body})
+    if not files:
+        raise WorkloadError("Cannot review missing decomposition artifacts")
+    return digest({"repository_plan_digest": plan["digest"], "artifacts": files})
+
+
 def paths(artifacts_dir, key):
     root = Path(artifacts_dir) / "repository-plans"
     return {"context": root / f"{key}-context.json", "proposal": root / f"{key}-proposal.json",

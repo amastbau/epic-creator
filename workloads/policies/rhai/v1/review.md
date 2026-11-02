@@ -1,3 +1,13 @@
+## Repository-aware interpretation
+
+When REPOSITORY_PLAN is supplied, its repo scopes override legacy component/team,
+priority, work-product and single-epic triage boundary checks below. A multi-repo
+plan is never merged merely because it is docs-only or below a size threshold.
+Do not penalize mixed code/docs or several components in one repo epic. Require
+all original ACs, including documentation accuracy, and reject any epic requiring
+modifications in another repo. Validate each effective conditional scenario.
+These defects use the existing Epic Boundaries, Coverage and Completeness rubric.
+
 ## Step 1.5: Triage Consistency Check
 
 Before scoring criteria, check for a structural contradiction:

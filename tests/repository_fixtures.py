@@ -1,5 +1,6 @@
 """Synthetic Git-backed workload fixtures, never production approval data."""
 from dataclasses import replace
+from copy import deepcopy
 import importlib
 import importlib.util
 import json
@@ -87,3 +88,43 @@ def proposal(context):
                                     "quote": "Manager and cloudmanager changes belong in operator."}]}}
                 for n, desc, component, team in [(1, "Manager logging", "Operator", "Team A"),
                                                 (2, "Cloudmanager logging", "Cloudmanager", "Team B")]]}
+
+
+def epic_metadata(plan):
+    identities = {scope["scope_id"]:
+                  f"{plan['source_key']}-" + (f"BRANCH-{scope['branch']}-" if scope.get("branch") else "") + f"E{n:03d}"
+                  for n, scope in enumerate(plan["scopes"], 1)}
+    result = []
+    for scope in plan["scopes"]:
+        data = {"epic_id": identities[scope["scope_id"]], "title": "Repository-scoped work",
+                "parent_strat": plan["source_key"], "component": scope["components"][0],
+                "components": scope["components"], "team": scope["teams"][0],
+                "type": "Implementation" if scope["kind"] == "implementation" else "Investigation",
+                "priority": scope["priority"], "repository_scope": scope["scope_id"],
+                "work_item_ids": scope["work_item_ids"],
+                "mapping_snapshot_digest": plan["mapping_snapshot_digest"],
+                "dependencies": [identities[dep] for dep in scope["dependencies"]]}
+        for key in ("target_repository", "implementation_type", "branch"):
+            if scope.get(key) is not None: data[key] = deepcopy(scope[key])
+        if scope.get("gated_by"): data["gated_by"] = identities[scope["gated_by"]]
+        result.append(data)
+    return result
+
+
+def write_repository_decomposition(source, plan):
+    import artifact_utils as artifacts
+    root = Path(source).parent.parent
+    metadata = {k: v for k, v in artifacts.read_frontmatter(source)[0].items()
+                if k in artifacts._WORKLOAD_FIELDS}
+    for epic in epic_metadata(plan):
+        members = [item for item in plan["work_items"] if item["id"] in epic["work_item_ids"]]
+        body = "## Scope\n" + "\n".join(item["description"] for item in members)
+        body += "\n## Acceptance Criteria\n" + "\n".join(ac["text"] for item in members for ac in item["acceptance_criteria"])
+        artifacts.write_frontmatter(root / f"epic-tasks/{epic['epic_id']}.md",
+                                    {**metadata, **epic}, "epic-task", body=body + "\n")
+    summary = {**metadata, "parent_strat": plan["source_key"], "epic_count": len(plan["scopes"]),
+               "critical_path_length": 1, "decompose_complete": True,
+               "mapping_snapshot_digest": plan["mapping_snapshot_digest"]}
+    artifacts.write_frontmatter(root / f"epic-tasks/{plan['source_key']}-decomposition.md", summary,
+                                "decomp-summary", body="HLR-1, HLR-2, AC-1, AC-2 covered\n")
+    return metadata

@@ -1,11 +1,12 @@
 import json
 from pathlib import Path
 import sys
+import shutil
 
 import pytest
 import yaml
 
-from repository_fixtures import configured, git_source, proposal, strategy
+from repository_fixtures import ROOT, configured, git_source, proposal, strategy
 import artifact_utils as artifacts
 import check_decompose_progress as progress
 import pipeline_state as pipeline
@@ -17,6 +18,11 @@ import workload
 def setup_pipeline(monkeypatch, tmp_path, capsys):
     repo = git_source(tmp_path)
     selected = configured(repo)
+    shutil.copytree(ROOT / "workloads", tmp_path / "workloads")
+    monkeypatch.setattr(workload, "WORKLOADS_DIR", tmp_path / "workloads")
+    components = tmp_path / selected.planning.component_file
+    components.parent.mkdir(parents=True, exist_ok=True)
+    components.write_text("Operator\nCloudmanager\n")
     monkeypatch.setattr(workload, "get_workload", lambda *a, **k: selected)
     monkeypatch.setattr(pipeline_workload, "get_workload", lambda *a, **k: selected)
     source = strategy(tmp_path)
