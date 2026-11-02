@@ -60,6 +60,12 @@ python3 scripts/fetch_components.py [--workload ID]
 
 Retry each once on failure. If retry fails, stop: "bootstrap failed."
 
+For repository-enabled workloads, the dispatcher inserts PLAN_REPOSITORIES after
+FETCH. It retrieves configured Git evidence and binds its exact revisions before
+launching the shared repository planner. Complete that phase before drafting
+epics; never bypass it or guess a default repository. Missing/conflicting evidence
+produces a per-strategy unresolved report and other batch items continue.
+
 ### 4. Resume check + batch
 
 Read all IDs: `python3 scripts/state.py read-ids tmp/pipeline-all-ids.txt`

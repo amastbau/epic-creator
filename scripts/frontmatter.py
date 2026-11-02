@@ -33,6 +33,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from artifact_utils import (
     SCHEMAS,
@@ -232,6 +233,29 @@ def cmd_set(args):
                 from workload import get_workload
                 get_workload(combined["workload_id"]).planning.validate_component(data["component"])
         except (OSError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if schema_type == "decomp-review":
+        try:
+            from workload import get_workload
+            existing, _ = read_frontmatter(args.file)
+            combined = {**existing, **data}
+            if combined.get("workload_id"):
+                selected = get_workload(combined["workload_id"])
+                if selected.planning.repository_policy:
+                    from repository_plan import paths, validate_repository_plan, decomposition_digest
+                    root = Path(args.file).parent.parent
+                    locations = paths(root, combined["strat_id"])
+                    plan = json.loads(locations["plan"].read_text())
+                    context = json.loads(locations["context"].read_text())
+                    validate_repository_plan(plan, context)
+                    stamps = {"repository_plan_digest": plan["digest"],
+                              "reviewed_decomposition_digest": decomposition_digest(plan, root, combined["strat_id"])}
+                    if any(name in data and data[name] != value for name, value in stamps.items()):
+                        raise ValueError("Explicit review digest conflicts with current artifacts")
+                    data.update(stamps)
+        except (OSError, ValueError, KeyError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
 

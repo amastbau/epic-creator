@@ -1,18 +1,20 @@
 """Workload binding and artifact checks for the shared dispatcher.
 
-This module performs local validation only. It has no Jira or model client.
+Repository-enabled stages refresh configured Git evidence. No Jira/model client.
 """
 from copy import deepcopy
 from pathlib import Path
+import json
 import yaml
 
 from artifact_utils import _WORKLOAD_FIELDS, read_frontmatter_validated, ValidationError
 from workload import get_workload, WorkloadError
 
 BOUND_FIELDS = {"workload_id", "workload_version", "workload_digest", "planning_digest",
-                "workload_explicit", "source_bindings"}
+                "workload_explicit", "source_bindings", "repository_bindings"}
 STAGES = {"FETCH": "fetch", "DECOMPOSE": "decompose", "REVIEW_DECOMP": "review",
-          "RE_REVIEW": "review", "REVISE_DECOMP": "revise", "RE_REVISE": "revise"}
+          "RE_REVIEW": "review", "REVISE_DECOMP": "revise", "RE_REVISE": "revise",
+          "PLAN_REPOSITORIES": "repository_plan"}
 
 
 def bound_workload(state):
@@ -40,10 +42,52 @@ def phase_config(state, base):
         variables.update(WORKLOAD_ID=selected.id, COMPONENT_FILE=selected.planning.component_file,
                          ARTIFACT_TEMPLATE=str(selected.planning.artifact_template),
                          PASS_SCORE=str(selected.planning.pass_score), MAX_SCORE=str(selected.planning.max_score),
-                         FETCH_OPTIONS=f"--workload {selected.id}" if state.get("workload_explicit") else "")
-        if stage != "fetch":
+                         FETCH_OPTIONS=f"--workload {selected.id}" if state.get("workload_explicit") or selected.planning.repository_policy else "")
+        if selected.planning.repository_policy:
+            variables.update(REPOSITORY_PLAN="artifacts/repository-plans/{ID}.json",
+                             REPOSITORY_CONTEXT="artifacts/repository-plans/{ID}-context.json")
+        if stage not in ("fetch", "repository_plan"):
             variables["POLICY_FILE"] = str(getattr(selected.planning, stage))
     return config
+
+
+def agent_variables(state, key, variables):
+    result = {name: value.replace("{ID}", key) for name, value in variables.items()}
+    if state["phase"] != "FETCH" and bound_workload(state).planning.repository_policy:
+        from repository_plan import paths
+        context = _json(paths("artifacts", key)["context"])
+        result["MAPPING_SNAPSHOT_DIGEST"] = context["digest"]
+    return result
+
+
+def _json(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise WorkloadError(f"Missing or invalid repository artifact: {path}") from exc
+
+
+def repository_plan_for(state, key, artifacts_dir="artifacts", prepare=False):
+    from repository_context import assert_context_current, load_repository_context
+    from repository_plan import atomic_json, finalize_repository_plan, paths, validate_repository_plan
+    selected = bound_workload(state)
+    locations = paths(artifacts_dir, key)
+    source = Path(artifacts_dir) / f"strat-tasks/{key}.md"
+    if prepare and not locations["context"].exists():
+        context = load_repository_context(selected, source, Path(artifacts_dir))
+        atomic_json(locations["context"], context)
+        if context["status"] != "ready":
+            atomic_json(locations["plan"], finalize_repository_plan(context, {}))
+    context = _json(locations["context"])
+    assert_context_current(context, selected, source)
+    binding = state.get("repository_bindings", {}).get(key)
+    if binding is not None and binding != context["digest"]:
+        raise WorkloadError("Repository mapping binding changed during this run")
+    if prepare:
+        return context
+    plan = _json(locations["plan"])
+    validate_repository_plan(plan, context)
+    return plan
 
 
 def validate_ids(state, ids):
@@ -93,6 +137,12 @@ def validate_artifact(state, key, path, schema, artifacts_dir="artifacts"):
         raise WorkloadError(f"{key}: epic identity conflicts with filename at {path}")
     if schema == "decomp-review" and source:
         bound_workload(state).planning.validate_review(data)
+    if schema == "decomp-review" and bound_workload(state).planning.repository_policy:
+        from repository_plan import decomposition_digest
+        plan = repository_plan_for(state, key, artifacts_dir)
+        if (data.get("repository_plan_digest") != plan["digest"]
+                or data.get("reviewed_decomposition_digest") != decomposition_digest(plan, Path(artifacts_dir), key)):
+            raise WorkloadError("Review no longer matches repository plan or decomposition content")
     return data
 
 
@@ -103,8 +153,13 @@ def validate_decomposition(state, key, artifacts_dir="artifacts"):
     branches = sorted(directory.glob(f"{key}-BRANCH-*-E[0-9][0-9][0-9].md"))
     if not main or summary["epic_count"] not in {len(main), len(main) + len(branches)}:
         raise WorkloadError(f"{key}: summary epic count does not match generated files")
-    for path in main + branches:
-        validate_artifact(state, key, path, "epic-task", artifacts_dir)
+    epics = [validate_artifact(state, key, path, "epic-task", artifacts_dir) for path in main + branches]
+    if bound_workload(state).planning.repository_policy:
+        from repository_plan import validate_epic_scopes
+        plan = repository_plan_for(state, key, artifacts_dir)
+        if summary.get("mapping_snapshot_digest") != plan["mapping_snapshot_digest"]:
+            raise WorkloadError("Decomposition summary has wrong repository mapping snapshot")
+        validate_epic_scopes(plan, epics)
 
 
 def validate_completed(state, phase, ids):
@@ -113,6 +168,9 @@ def validate_completed(state, phase, ids):
         metadata = source_metadata(state, key)
         if phase == "FETCH":
             state.setdefault("source_bindings", {})[key] = metadata
+        elif phase == "PLAN_REPOSITORIES":
+            plan = repository_plan_for(state, key)
+            state.setdefault("repository_bindings", {})[key] = plan["mapping_snapshot_digest"]
         elif phase in ("DECOMPOSE", "REVISE_DECOMP", "RE_REVISE"):
             validate_decomposition(state, key)
         elif phase in ("REVIEW_DECOMP", "RE_REVIEW"):
@@ -126,6 +184,8 @@ def validate_inputs(state, phase, ids):
         return
     for key in ids:
         source_metadata(state, key)
+        if bound_workload(state).planning.repository_policy:
+            repository_plan_for(state, key, prepare=phase == "PLAN_REPOSITORIES")
         if phase in ("REVIEW_DECOMP", "RE_REVIEW", "REVISE_DECOMP", "RE_REVISE"):
             validate_decomposition(state, key)
         if phase in ("REVISE_DECOMP", "RE_REVISE"):
