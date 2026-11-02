@@ -15,6 +15,9 @@ boundary contract: create exactly one epic per scope, covering every assigned
 work item and its repo-local acceptance conditions. Do not first create component
 or subsystem epics and attach targets afterward. Never change the bound inventory,
 plan, source snapshots or validation code. An unresolved plan blocks drafting.
+Write only epic artifacts, signal rationale sidecars and the decomposition
+summary during this phase. Do not write or pre-complete review artifacts; the
+review worker evaluates the drafts independently in the following phase.
 
 The repository plan takes precedence over the selected workload policy's team,
 component, subsystem, priority, work-product, size and single-epic triage splits.

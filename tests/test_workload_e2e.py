@@ -497,6 +497,11 @@ def model_worker(workspace, phase, agent):
               for p in sorted(directory.rglob("*")) if p.is_file() and p.suffix in (".md", ".txt", ".json", ".yaml", ".yml")}
     schemas = {name: workspace.cli("frontmatter", "schema", name, "--workload", workspace.workload_id).stdout
                for name in ("epic-task", "decomp-summary", "decomp-review")}
+    # JSON Schema uses Unicode ECMAScript regexes, which reject Python's \- escape.
+    key = re.escape(workspace.key).replace(r"\-", "-")
+    output_path = (rf"^artifacts/epic-reviews/{key}-decomp-review\.md$"
+                   if phase in ("REVIEW_DECOMP", "RE_REVIEW") else
+                   rf"^artifacts/epic-tasks/{key}-(?:decomposition|(?:BRANCH-[A-Z]-)?E[0-9]{{3}}(?:-ai-signals)?)\.md$")
     prompt = (
         f"Run the {phase} worker for the supplied strategy. Follow the actual shared prompt and selected policy below.\n"
         "You have no tools. Return only the requested artifact edits as structured output. "
@@ -505,6 +510,8 @@ def model_worker(workspace, phase, agent):
         "A trusted local adapter applies metadata through frontmatter.py --source, inheriting provenance. "
         "Supply only producer fields, not workload/source provenance or computed ai_implementability fields. "
         "Use the exact full strategy key for all IDs, paths and dependencies. Include the required rationale sidecars. "
+        f"Return only this phase's artifacts matching {output_path}. Draft/revision workers must never emit reviews; "
+        "review workers emit only their review artifact. "
         "Review in a fresh context: judge the supplied artifacts against the rubric; do not invent passing scores. "
         "Revision must follow the actual review and set revised=false if no changes are required.\n\n"
         + agent["vars"] + "\nSHARED PROMPT\n" + shared + "\nSELECTED POLICY\n" + policy
@@ -517,6 +524,7 @@ def model_worker(workspace, phase, agent):
                   "required": ["path", "body", "frontmatter_json"],
                   "properties": {name: {"type": "string"}
                                  for name in ("path", "body", "frontmatter_json")}}}}}
+    schema["properties"]["artifacts"]["items"]["properties"]["path"]["pattern"] = output_path
     env = {k: v for k, v in os.environ.items() if not k.startswith("JIRA_")}
     command = ["claude", "--print", "--output-format", "json", "--tools", "",
                "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
@@ -543,8 +551,7 @@ def model_worker(workspace, phase, agent):
         relative = artifact["path"]
         target = (workspace.path / relative).resolve()
         assert target.is_relative_to(workspace.path.resolve())
-        assert relative.startswith((f"artifacts/epic-tasks/{workspace.key}-",
-                                    f"artifacts/epic-reviews/{workspace.key}-"))
+        assert re.fullmatch(output_path, relative), f"{phase}: artifact outside this phase: {relative}"
         assert target.suffix == ".md"
         workspace.write(relative, body=artifact["body"], **json.loads(artifact["frontmatter_json"]))
 

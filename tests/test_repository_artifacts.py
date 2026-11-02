@@ -150,3 +150,14 @@ def test_revision_check_reports_broken_repository_binding(monkeypatch, tmp_path,
     pipeline_state.advance(state)
     status = pipeline_state.read_status(source.stem)
     assert status and status["status"] == "invalid"
+
+
+def test_drafting_cannot_supply_its_own_completed_review(monkeypatch, tmp_path, capsys):
+    import pipeline_state
+    _, _, _, review = reviewed_decomposition(monkeypatch, tmp_path, capsys)
+    review.write_text("Drafting worker tried to pre-create a passing review.\n")
+    state = pipeline_state._load_state()
+    state["phase"] = "DECOMPOSE"
+    next_phase, _ = pipeline_state.advance(state)
+    assert next_phase == "REVIEW_DECOMP"
+    assert not review.exists()

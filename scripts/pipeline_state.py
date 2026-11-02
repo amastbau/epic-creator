@@ -291,6 +291,10 @@ def advance(state, dry_run=False):
         nxt = sequence[sequence.index(phase) + 1]
         if phase == "DECOMPOSE" and not dry_run:
             _compute_ai_scores("tmp/pipeline-active-ids.txt", state)
+            if bound_workload(state).planning.repository_policy:
+                for key in _read_ids("tmp/pipeline-active-ids.txt"):
+                    # A draft cannot pre-complete the independent review phase.
+                    Path(f"artifacts/epic-reviews/{key}-decomp-review.md").unlink(missing_ok=True)
         return nxt, f"{phase} → {nxt}"
 
     # --- REVIEW_DECOMP → REVISE_DECOMP (unconditional first revision) ---
