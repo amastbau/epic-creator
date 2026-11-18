@@ -257,6 +257,21 @@ SCHEMAS = {
     },
 }
 
+SCHEMAS["epic-task"].update({
+    "repository_scope": {"type": "string"},
+    "work_item_ids": {"type": "list"},
+    "components": {"type": "list"},
+    "mapping_snapshot_digest": {"type": "string", "pattern": r"^[0-9a-f]{64}$"},
+    "target_repository": {"type": "dict", "fields": {
+        name: {"type": "string", "required": True}
+        for name in ("inventory_key", "provider", "host", "namespace", "repository")}},
+})
+SCHEMAS["decomp-summary"]["mapping_snapshot_digest"] = {"type": "string", "pattern": r"^[0-9a-f]{64}$"}
+SCHEMAS["decomp-review"].update({
+    name: {"type": "string", "pattern": r"^[0-9a-f]{64}$"}
+    for name in ("repository_plan_digest", "reviewed_decomposition_digest")
+})
+
 # Optional for legacy artifacts; validated together when workload_id is present.
 # These have no defaults, so reading old artifacts keeps their original shape.
 _WORKLOAD_FIELDS = {
@@ -366,6 +381,29 @@ def validate(data, schema_type):
                 raise WorkloadError("planning_digest does not match the registered policies")
             if schema_type == "decomp-review" and "planning_digest" in data:
                 workload.planning.validate_review(data)
+            if workload.planning and workload.planning.repository_policy:
+                required = []
+                if schema_type == "epic-task":
+                    required = ["repository_scope", "work_item_ids", "components", "mapping_snapshot_digest"]
+                    if data.get("type") == "Implementation":
+                        required.append("target_repository")
+                    for name in ("components", "work_item_ids"):
+                        values = data.get(name)
+                        if (not isinstance(values, list) or not values
+                                or any(not isinstance(value, str) or not value for value in values)
+                                or len(values) != len(set(values))):
+                            raise WorkloadError(f"{name} must contain unique nonempty strings")
+                    if data.get("component") != data["components"][0]:
+                        raise WorkloadError("Primary component must be first in components")
+                    for component in data["components"]:
+                        workload.planning.validate_component(component)
+                elif schema_type == "decomp-summary":
+                    required = ["mapping_snapshot_digest"]
+                elif schema_type == "decomp-review":
+                    required = ["repository_plan_digest", "reviewed_decomposition_digest"]
+                for name in required:
+                    if not data.get(name):
+                        raise WorkloadError(f"Missing repository field: {name}")
             workload.validate_identity(data.get("source_key"), data.get("source_project"),
                                        data.get("source_issue_type"))
             if not isinstance(data.get("source_revision"), str) or not data["source_revision"].strip():

@@ -1,3 +1,13 @@
+## Repository policy precedence
+
+When a bound REPOSITORY_PLAN is provided, draft its scopes directly. Its repository
+boundaries override component/team, subsystem, work-product, priority and size
+splits in the legacy rules below. Single-epic triage applies only when the plan
+contains one scope; multi-repo docs-only work still has one epic per repo.
+Mixed code/docs in the same repo retains docs accuracy ACs and uses the general
+implementation route. Distinct delivery types remain internal work items.
+Investigations and external interface dependencies retain their meaning.
+
 ## Step 0: Triage
 
 Read the strategy file. Run these checks in order; first match terminates the flow:
@@ -93,7 +103,7 @@ Multiple independent unknowns can produce multiple Investigation epics, even for
 Apply these rules to construct edges between epics:
 
 ### Epic Boundary Rules
-1. Different component OR different team → separate epics
+1. With REPOSITORY_PLAN, one Implementation per repository scope; otherwise different component OR different team → separate epics
 2. Same component + same team + same logical change → single epic. When splitting within a single component, split along two axes:
    - **Architectural sub-system boundaries**: backend API vs. frontend plugin, Go service vs. React UI, etc.
    - **Work-product type boundaries**: code implementation, content authoring (sample notebooks, tutorials, curated examples), and documentation are different kinds of work — they require different skills, different review criteria, and produce different PR review cycles. An epic that mixes code implementation with content authoring should be split even if the same team owns both. **Exception — incidental documentation touch-ups:** updating captions, screenshots, or references that fall out of a code change (no new content authored) is not a separate work stream — fold it into the originating epic as scope/acceptance criteria rather than a standalone `docs-authoring` epic. Only substantive content/documentation authoring (new tutorials, sample notebooks, curated examples, new or rewritten doc topics), or a strategy with `Documentation Support: Yes`, warrants a separate epic.
@@ -110,13 +120,13 @@ Apply these rules to construct edges between epics:
 8. `license-validation` ∥ `konflux-onboarding` parallel (config doesn't depend on specific deps)
 9. `license-validation` → general implementation serial (if licenses fail, deps change, affects approach)
 10. `konflux-onboarding` ∥ general implementation parallel (config independent of code; AC gates first execution). **Add NO blocking edge in either direction.** It is tempting to make the general implementation depend on `konflux-onboarding` ("the code needs a build pipeline first") — do not. That coupling is enforced by the Rule 25 "build pipeline green" AC on the general implementation epic, never by a DAG dependency. A `konflux-onboarding → general` edge serializes work that must run in parallel and is a rule violation.
-11. `docs-authoring` blocked by ALL Implementation epics in strategy (always last; docs describe what was built). These edges do not trigger priority inheritance — see Step 4 `docs-authoring` priority exception.
+11. With REPOSITORY_PLAN, docs in the same repo are internal work with accuracy ACs; a separate docs repo has only evidence-based dependencies. Otherwise `docs-authoring` is blocked by ALL Implementation epics in strategy (always last; docs describe what was built). These edges do not trigger priority inheritance — see Step 4 `docs-authoring` priority exception.
 
 ### Implementation → Implementation Edges
 12. Framework/library → consumer Implementations always serial (consumers build against framework)
 13. Implementation producing artifact another epic's code builds against (API, CRD, library) → consuming Implementation serial. Does NOT apply to configuration references (image digests, endpoint URLs) — those are AC gates. **In particular, an image digest / SHA consumed by OLM/CSV packaging (`RELATED_IMAGE`) is a configuration reference, not a build-against artifact: the packaging epic gets a "pinned image digest available" AC, NOT a `dependencies` edge on the image-build or `konflux-onboarding` epic.** Wiring such an edge both mis-serializes parallel work and violates Rule 10 — the digest is filled in at execution time, so the epics run in parallel.
 14. Implementations in different repos, no shared artifacts → parallel
-15. Implementations in same repo, different areas → parallel (merge conflicts = coordination risk, not dependency)
+15. With REPOSITORY_PLAN, different areas in the same repo are work items inside one epic; otherwise same-repo different-area implementations may run in parallel.
 
 ### External Dependency Edges
 16. External dependency Implementation (upstream PR/RFC) → Tier 2 Implementations always serial (gated by acceptance)

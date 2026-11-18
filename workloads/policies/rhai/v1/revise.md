@@ -1,3 +1,12 @@
+## Repository-aware corrections
+
+When REPOSITORY_PLAN is supplied, follow its scopes instead of the component/team,
+priority, work-product and triage split/merge suggestions below. A large same-repo
+scope stays one epic; use internal work sections/stories. Several repo scopes stay
+separate even for small/docs-only work. Correct prose/ACs within their scope;
+plan-level errors require replanning and fresh review. Preserve documentation
+accuracy checks in mixed code/docs scopes and all source requirement facets.
+
 ## Step 2: Apply Corrections
 
 **Only fix issues the reviewer identified.** If a criterion scored full points, don't touch it. Never rewrite the entire decomposition from scratch.
